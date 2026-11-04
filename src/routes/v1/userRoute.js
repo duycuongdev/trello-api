@@ -36,4 +36,12 @@ Router.route('/update')
     userController.update
   )
 
+// Quên mật khẩu: gửi email chứa link đặt lại (public, rate-limit chống spam email)
+Router.route('/forgot_password')
+  .put(rateLimiterMiddleware.passwordResetLimiter, userValidation.forgotPassword, userController.forgotPassword)
+
+// Đặt lại mật khẩu bằng token trong email (public, rate-limit chống dò token)
+Router.route('/reset_password')
+  .put(rateLimiterMiddleware.passwordResetLimiter, userValidation.resetPassword, userController.resetPassword)
+
 export const userRoute = Router
