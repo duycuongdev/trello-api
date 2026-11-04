@@ -3,7 +3,15 @@
  * - Quản lý phòng (Room) theo từng board: board_{boardId}
  * - Theo dõi danh sách thành viên đang trực tuyến xem bảng (Active Viewers)
  * - Broadcast các thao tác thay đổi bảng (kéo thả column, kéo thả card, tạo/sửa/xóa card, v.v.)
+ *
+ * Bảo mật:
+ * - Mọi connection đã được xác thực ở handshake (socketAuthMiddleware) => socket.user là user thật từ DB
+ * - Không tin vào object user client gửi lên khi join phòng
+ * - Chỉ owner/member của board mới được vào phòng board
+ * - Chỉ socket đã được xác minh membership và join phòng hợp lệ mới được broadcast sự kiện
  */
+
+import { authorizationService } from '~/services/authorizationService'
 
 // Lưu trữ người dùng đang online theo từng Board: Map<boardId, Map<socketId, user>>
 const activeBoardUsers = new Map()
@@ -35,55 +43,72 @@ const cleanupUserFromBoard = (socket, io, boardId) => {
 }
 
 export const boardSocket = (socket, io) => {
+  // Ghi nhận các board room mà socket này đã được server xác minh membership rồi
+  // (dùng để chặn broadcast từ socket chưa join hợp lệ mà không cần query DB mỗi event)
+  socket.joinedBoardIds = new Set()
+
   // Client tham gia vào phòng của một Board cụ thể
-  socket.on('FE_USER_JOIN_BOARD_ROOM', ({ boardId, user }) => {
-    if (!boardId) return
+  socket.on('FE_USER_JOIN_BOARD_ROOM', async ({ boardId } = {}) => {
+    if (!boardId || !socket.user) return
+
+    // Kiểm tra quyền: chỉ Owner/Member của board mới được vào phòng (không tin user client gửi)
+    try {
+      await authorizationService.requireBoardAccess(socket.user._id, boardId)
+    } catch {
+      socket.emit('BE_BOARD_JOIN_ERROR', {
+        boardId,
+        message: 'You do not have permission to join this board room!'
+      })
+      return
+    }
 
     const roomName = `board_${boardId}`
     socket.join(roomName)
+    socket.joinedBoardIds.add(boardId)
 
-    // Lưu thông tin vào socket instance để xử lý khi disconnect
-    socket.boardId = boardId
-    socket.boardUser = user
-
+    // Lưu thông tin user đã xác thực từ server (bỏ qua hoàn toàn object user do client gửi)
     if (!activeBoardUsers.has(boardId)) {
       activeBoardUsers.set(boardId, new Map())
     }
-
-    if (user && user._id) {
-      activeBoardUsers.get(boardId).set(socket.id, user)
-    }
+    activeBoardUsers.get(boardId).set(socket.id, socket.user)
 
     // Gửi danh sách người dùng đang online trên bảng cho toàn bộ client trong phòng
     io.to(roomName).emit('BE_BOARD_USERS_ONLINE', getUniqueOnlineUsers(boardId))
   })
 
   // Client chủ động rời khỏi phòng của Board (ví dụ chuyển trang khác)
-  socket.on('FE_USER_LEAVE_BOARD_ROOM', ({ boardId }) => {
+  socket.on('FE_USER_LEAVE_BOARD_ROOM', ({ boardId } = {}) => {
     if (!boardId) return
 
     const roomName = `board_${boardId}`
     socket.leave(roomName)
+    socket.joinedBoardIds.delete(boardId)
     cleanupUserFromBoard(socket, io, boardId)
-
-    socket.boardId = null
-    socket.boardUser = null
   })
 
   // Broadcast các thao tác thay đổi dữ liệu của Board tới tất cả người dùng khác đang xem
-  // data gồm: { boardId, actionType, payload, senderId, senderName }
+  // data gồm: { boardId, actionType, payload }
   socket.on('FE_BOARD_UPDATED', (data) => {
-    if (!data?.boardId) return
+    if (!socket.user) return
+    if (!data?.boardId || !socket.joinedBoardIds.has(data.boardId)) return
 
     const roomName = `board_${data.boardId}`
+    // Ép buộc sender identity từ thông tin đã xác thực trên server, không tin client gửi
+    const safeData = {
+      ...data,
+      senderId: socket.user._id,
+      senderName: socket.user.displayName || socket.user.email
+    }
     // Phát sự kiện tới tất cả thành viên trong phòng ngoại trừ người gửi
-    socket.to(roomName).emit('BE_BOARD_UPDATED', data)
+    socket.to(roomName).emit('BE_BOARD_UPDATED', safeData)
   })
 
   // Xử lý khi socket ngắt kết nối bất ngờ (tắt tab, mất mạng)
   socket.on('disconnect', () => {
-    if (socket.boardId) {
-      cleanupUserFromBoard(socket, io, socket.boardId)
+    if (socket.joinedBoardIds) {
+      socket.joinedBoardIds.forEach((boardId) => {
+        cleanupUserFromBoard(socket, io, boardId)
+      })
     }
   })
 }

@@ -13,6 +13,7 @@ import socketIo from 'socket.io'
 import http from 'http'
 import { inviteUserToBoardSocket } from './sockets/inviteUserToBoardSocket'
 import { boardSocket } from './sockets/boardSocket'
+import { socketAuthMiddleware } from './sockets/socketAuthMiddleware'
 
 const START_SERVER = () => {
   const app = express()
@@ -59,6 +60,8 @@ const START_SERVER = () => {
 
   // create new socket.io server
   const io = new socketIo.Server(server, { cors: corsOptions })
+  // Bắt buộc xác thực JWT ở bước handshake: connection không hợp lệ sẽ bị từ chối ngay
+  io.use(socketAuthMiddleware)
   io.on('connection', (socket) => {
     inviteUserToBoardSocket(socket)
     boardSocket(socket, io)
