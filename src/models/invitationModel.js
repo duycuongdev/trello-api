@@ -154,7 +154,7 @@ const deleteManyByBoardId = async (boardId, { session } = {}) => {
   try {
     const result = await GET_DB().collection(INVITATION_COLLECTION_NAME).deleteMany({
       'boardInvitation.boardId': new ObjectId(boardId)
-    })
+    }, { session })
     return result
   } catch (error) { throw new Error(error) }
 }

@@ -131,7 +131,7 @@ const deleteManyByColumnId = async (columnId, { session } = {}) => {
 }
 
 // function to use push element in the first position of array
-const unshiftNewComment = async (cardId, commentData) => {
+const unshiftNewComment = async (cardId, commentData, { session } = {}) => {
   try {
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId) },
@@ -144,7 +144,7 @@ const unshiftNewComment = async (cardId, commentData) => {
 }
 
 // Cập nhật nội dung một comment trong Card
-const updateComment = async (cardId, commentId, content, targetComment) => {
+const updateComment = async (cardId, commentId, content, targetComment, { session } = {}) => {
   try {
     // Xác định chính xác điều kiện tìm comment trong mảng (tránh dùng $or với toán tử $ của MongoDB)
     const hasId = Boolean(targetComment?._id || (commentId && isNaN(Number(commentId))))
@@ -176,7 +176,7 @@ const updateComment = async (cardId, commentId, content, targetComment) => {
 }
 
 // Xóa một comment khỏi Card
-const deleteComment = async (cardId, commentId, targetComment) => {
+const deleteComment = async (cardId, commentId, targetComment, { session } = {}) => {
   try {
     const hasId = Boolean(targetComment?._id || (commentId && isNaN(Number(commentId))))
     const pullCondition = hasId
@@ -198,7 +198,7 @@ const deleteComment = async (cardId, commentId, targetComment) => {
 }
 
 // Thêm tệp đính kèm mới vào vị trí đầu mảng attachments
-const unshiftNewAttachment = async (cardId, attachmentData) => {
+const unshiftNewAttachment = async (cardId, attachmentData, { session } = {}) => {
   try {
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId) },
@@ -210,7 +210,7 @@ const unshiftNewAttachment = async (cardId, attachmentData) => {
 }
 
 // Xóa tệp đính kèm theo attachmentId
-const deleteAttachment = async (cardId, attachmentId) => {
+const deleteAttachment = async (cardId, attachmentId, { session } = {}) => {
   try {
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId) },
@@ -221,7 +221,7 @@ const deleteAttachment = async (cardId, attachmentId) => {
   } catch (error) { throw new Error(error) }
 }
 
-const updateMembers = async (cardId, incomingMemberInfo) => {
+const updateMembers = async (cardId, incomingMemberInfo, { session } = {}) => {
   try {
     let updateCondition = {}
 

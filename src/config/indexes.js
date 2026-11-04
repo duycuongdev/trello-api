@@ -46,6 +46,15 @@ const INDEX_DEFINITIONS = [
       { key: { inviterId: 1 }, name: 'idx_inviterId' },
       { key: { 'boardInvitation.boardId': 1 }, name: 'idx_boardInvitation_boardId' }
     ]
+  },
+  {
+    collection: 'refresh_tokens',
+    indexes: [
+      { key: { tokenHash: 1 }, unique: true, name: 'uniq_tokenHash' },
+      { key: { userId: 1 }, name: 'idx_userId' },
+      // TTL index: MongoDB tự động xóa document khi quá expiresAt
+      { key: { expiresAt: 1 }, expireAfterSeconds: 0, name: 'ttl_expiresAt' }
+    ]
   }
 ]
 
