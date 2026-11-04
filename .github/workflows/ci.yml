@@ -27,13 +27,10 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Unit tests (không cần DB). Integration tests (npm run test:e2e) cần
-      # MONGODB_URI - bật secrets MONGODB_URI trong repo settings nếu muốn chạy:
-      - name: Unit tests
-        run: npm test
-
-      - name: Integration tests (optional, needs MONGODB_URI secret)
-        if: ${{ secrets.MONGODB_URI != '' }}
+      # npm test chạy cả unit (21) + integration (22); integration tự SKIP
+      # khi không có MONGODB_URI - thêm secrets MONGODB_URI + DATABASE_NAME
+      # trong repo settings để bật đầy đủ
+      - name: Tests (unit + integration; integration needs DB secrets)
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
@@ -45,4 +42,4 @@ jobs:
           BUILD_MODE: dev
           WEBSITE_DOMAIN_DEVELOPMENT: http://localhost:5173
           WEBSITE_DOMAIN_PRODUCTION: http://localhost:5173
-        run: npm run test:e2e
+        run: npm test
