@@ -13,7 +13,7 @@ import cookieParser from 'cookie-parser'
 import socketIo from 'socket.io'
 import http from 'http'
 import { inviteUserToBoardSocket } from './sockets/inviteUserToBoardSocket'
-import { boardSocket } from './sockets/boardSocket'
+import { boardSocket, setSocketServerInstance } from './sockets/boardSocket'
 import { socketAuthMiddleware } from './sockets/socketAuthMiddleware'
 
 const START_SERVER = () => {
@@ -61,6 +61,8 @@ const START_SERVER = () => {
 
   // create new socket.io server
   const io = new socketIo.Server(server, { cors: corsOptions })
+  // Đăng ký io instance cho service layer (vd: kick member bị remove khỏi board room)
+  setSocketServerInstance(io)
   // Bắt buộc xác thực JWT ở bước handshake: connection không hợp lệ sẽ bị từ chối ngay
   io.use(socketAuthMiddleware)
   io.on('connection', (socket) => {

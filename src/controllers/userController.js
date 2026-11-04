@@ -71,7 +71,9 @@ const logout = async (req, res, next) => {
     }
 
     // Thu hồi refresh token ở DB (nếu client có gửi) trước khi xóa cookie
-    const clientRefreshToken = req.cookies?.refreshToken || req.headers['x-refresh-token'] || req.body?.refreshToken
+    // Dual-auth: cookie httpOnly | x-refresh-token header | Bearer Authorization | body
+    const bearer = req.headers?.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null
+    const clientRefreshToken = req.cookies?.refreshToken || req.headers['x-refresh-token'] || bearer || req.body?.refreshToken
     await userService.logout(clientRefreshToken)
 
     // Xóa cookie với đầy đủ options tương ứng để trình duyệt chấp thuận xóa
@@ -84,7 +86,9 @@ const logout = async (req, res, next) => {
 
 const refreshToken = async (req, res, next) => {
   try {
-    const clientRefreshToken = req.cookies?.refreshToken || req.headers['x-refresh-token'] || req.body?.refreshToken
+    // Dual-auth: cookie httpOnly | x-refresh-token header | Bearer Authorization | body
+    const bearer = req.headers?.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null
+    const clientRefreshToken = req.cookies?.refreshToken || req.headers['x-refresh-token'] || bearer || req.body?.refreshToken
     const result = await userService.refreshToken(clientRefreshToken)
     res.cookie('accessToken', result.accessToken, {
       httpOnly: true,

@@ -65,11 +65,9 @@ export const CREATE_DB_INDEXES = async () => {
   for (const { collection, indexes } of INDEX_DEFINITIONS) {
     try {
       const created = await db.collection(collection).createIndexes(indexes)
-      // eslint-disable-next-line no-console
       logger.info(`[DB Indexes] ${collection}: ${created.numIndexesAfter ?? 'ok'} indexes ensured`)
     } catch (error) {
       // Không chặn startup: index chỉ là tối ưu / ràng buộc, lỗi thường do dữ liệu cũ vi phạm unique
-      // eslint-disable-next-line no-console
       logger.error(`[DB Indexes] FAILED on ${collection}:`, error?.message || error)
     }
   }
