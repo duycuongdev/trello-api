@@ -2,6 +2,7 @@
 import express from 'express'
 import exitHook from 'async-exit-hook'
 import { CONNECT_DB, CLOSE_DB } from '~/config/mongodb'
+import { CREATE_DB_INDEXES } from '~/config/indexes'
 import { env } from '~/config/environment'
 import { APIs_V1 } from '~/routes/v1'
 import { errorHandlingMiddleware } from './middlewares/errorHandlingMiddleware'
@@ -94,6 +95,9 @@ const START_SERVER = () => {
     console.log('Connecting to MongoDB Clould Atlas!')
     await CONNECT_DB()
     console.log('Connected to MongoDB Clould Atlas!')
+
+    // Đảm bảo các index cần thiết tồn tại (idempotent, lỗi không chặn khởi động)
+    await CREATE_DB_INDEXES()
 
     START_SERVER()
   } catch (error) {
