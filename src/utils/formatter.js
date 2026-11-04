@@ -11,6 +11,7 @@ export const slugify = (val) => {
     .replace(/[^a-z0-9 -]/g, '') // remove non-alphanumeric characters
     .replace(/\s+/g, '-') // replace spaces with hyphens
     .replace(/-+/g, '-') // remove consecutive hyphens
+    .replace(/^-+|-+$/g, '') // remove leading/trailing hyphens (vd: 'dấu @#' -> 'dau-')
 }
 
 // Lấy một vài dữ liệu cụ thể trong User để tránh việc trả về các dữ liệu nhạy cảm như hash password

@@ -121,6 +121,19 @@ npm run build
 npm run start
 ```
 
+Run tests (unit tests for utils & validation middlewares — requires `npm run build` first):
+```bash
+npm run build
+npm test
+```
+
+API documentation (Swagger UI — served when the server is running):
+```
+GET /v1/docs        # Swagger UI
+GET /v1/docs.json   # Raw OpenAPI 3.0 spec
+GET /v1/health      # Health check (pings MongoDB, 503 when DB is down)
+```
+
 ---
 
 ## 👨‍💻 Author
