@@ -6,6 +6,7 @@ import { cloudinaryProvider } from '~/providers/CloundinaryProvider'
 import ApiError from '~/utils/ApiError'
 import { GET_DB } from '~/config/mongodb'
 import { ObjectId } from 'mongodb'
+import { v4 as uuidv4 } from 'uuid'
 import { authorizationService } from '~/services/authorizationService'
 
 const createNew = async (userId, reqBody) => {
@@ -52,7 +53,8 @@ const update = async (cardId, reqBody, cardCoverFile, userInfo) => {
     } else if (updateData.commentToAdd) {
       const commentData = {
         ...updateData.commentToAdd,
-        _id: Date.now().toString(),
+        // UUID thay cho Date.now(): tránh trùng _id khi 2 comment cùng mili-giây
+        _id: uuidv4(),
         userId: userInfo._id,
         userEmail: userInfo.email,
         commentedAt: Date.now()
@@ -131,7 +133,8 @@ const addAttachment = async (userId, cardId, file, isChecklistOnly = false) => {
 
     const uploadResult = await cloudinaryProvider.streamUpload(file.buffer, 'cardAttachments')
     const attachmentData = {
-      _id: Date.now().toString(),
+      // UUID thay cho Date.now(): tránh trùng _id khi 2 attachment cùng mili-giây
+      _id: uuidv4(),
       fileName: file.originalname,
       fileUrl: uploadResult.secure_url,
       fileType: file.mimetype,
@@ -187,19 +190,19 @@ const copyCard = async (userId, cardId, reqBody) => {
       throw new ApiError(StatusCodes.BAD_REQUEST, 'Target column does not belong to this board!')
     }
 
-    // Format checklists with new unique IDs if copied
+    // Format checklists with new unique UUIDs if copied
     const checklistsToCopy = (keepOptions.checklists !== false && Array.isArray(sourceCard.checklists))
       ? sourceCard.checklists.map(cl => ({
-        _id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+        _id: uuidv4(),
         title: cl.title,
         items: (cl.items || []).map(item => ({
-          _id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+          _id: uuidv4(),
           title: item.title,
           isDone: Boolean(item.isDone),
           link: item.link || null,
           fileName: item.fileName || null,
           attachments: (item.attachments || []).map(att => ({
-            _id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+            _id: uuidv4(),
             url: att.url,
             fileName: att.fileName || null,
             isFile: Boolean(att.isFile)
