@@ -1,7 +1,7 @@
-/* eslint-disable no-console */
 import express from 'express'
 import exitHook from 'async-exit-hook'
 import { CONNECT_DB, CLOSE_DB } from '~/config/mongodb'
+import { logger } from '~/utils/logger'
 import { CREATE_DB_INDEXES } from '~/config/indexes'
 import { env } from '~/config/environment'
 import { APIs_V1 } from '~/routes/v1'
@@ -71,19 +71,19 @@ const START_SERVER = () => {
   if (env.BUILD_MODE === 'production') {
     const port = process.env.PORT || 8000
     server.listen(port, () => {
-      console.log(`Production Hello ${env.AUTHOR}, Back-end sever is running successfully at Port ${port}`)
+      logger.info(`Hello ${env.AUTHOR}, Back-end server is running successfully at Port ${port}`)
     })
   } else {
     server.listen(env.LOCAL_DEV_APP_PORT, env.LOCAL_DEV_APP_HOST, () => {
-      console.log(`Local Dev Hello ${env.AUTHOR}, Back-end sever is running successfully at Host ${env.LOCAL_DEV_APP_HOST} and Port: ${env.LOCAL_DEV_APP_PORT}`)
+      logger.info(`Hello ${env.AUTHOR}, Back-end server is running successfully at Host ${env.LOCAL_DEV_APP_HOST} and Port: ${env.LOCAL_DEV_APP_PORT}`)
     })
   }
 
   // thực hiện tác vụ cleanup trước khi dừng server lại
   exitHook(() => {
-    console.log('disconnecting')
+    logger.info('Disconnecting...')
     CLOSE_DB()
-    console.log('disconnected')
+    logger.info('Disconnected')
 
   })
 }
@@ -92,16 +92,16 @@ const START_SERVER = () => {
 // immediately-invoked / anonymous async function (IIFF)
 (async () => {
   try {
-    console.log('Connecting to MongoDB Clould Atlas!')
+    logger.info('Connecting to MongoDB Cloud Atlas...')
     await CONNECT_DB()
-    console.log('Connected to MongoDB Clould Atlas!')
+    logger.info('Connected to MongoDB Cloud Atlas')
 
     // Đảm bảo các index cần thiết tồn tại (idempotent, lỗi không chặn khởi động)
     await CREATE_DB_INDEXES()
 
     START_SERVER()
   } catch (error) {
-    console.log(error)
+    logger.error(error)
     process.exit(0)
   }
 })()

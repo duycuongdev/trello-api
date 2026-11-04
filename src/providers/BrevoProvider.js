@@ -3,6 +3,7 @@
 // https://github.com/getbrevo/brevo-node
 const SibApiV3Sdk = require('@getbrevo/brevo')
 import { env } from '~/config/environment'
+import { logger } from '~/utils/logger'
 
 /**
  * Có thể xem thêm phần docs cấu hình theo từng ngôn ngữ khác nhau tùy dự án ở Brevo Dashboard > Account > SMTP & API > API Keys
@@ -23,7 +24,7 @@ const sendEmail = async (recipientEmail, customSubject, htmlContent) => {
   if (trimmedKey.startsWith('xsmtpsib-')) {
     const errorMsg = 'Invalid Brevo Key Type: Bạn đang cấu hình khóa SMTP (bắt đầu bằng "xsmtpsib-"). Thư viện Brevo REST API yêu cầu API Key v3 (bắt đầu bằng "xkeysib-"). Hãy vào Brevo Dashboard > SMTP & API > Tab "API Keys" để tạo khóa "xkeysib-".'
     // eslint-disable-next-line no-console
-    console.error('❌ ' + errorMsg)
+    logger.error('❌ ' + errorMsg)
     throw new Error(errorMsg)
   }
 
