@@ -70,6 +70,10 @@ const logout = async (req, res, next) => {
       sameSite: 'none'
     }
 
+    // Thu hồi refresh token ở DB (nếu client có gửi) trước khi xóa cookie
+    const clientRefreshToken = req.cookies?.refreshToken || req.headers['x-refresh-token'] || req.body?.refreshToken
+    await userService.logout(clientRefreshToken)
+
     // Xóa cookie với đầy đủ options tương ứng để trình duyệt chấp thuận xóa
     res.clearCookie('accessToken', cookieOptions)
     res.clearCookie('refreshToken', cookieOptions)
@@ -83,6 +87,13 @@ const refreshToken = async (req, res, next) => {
     const clientRefreshToken = req.cookies?.refreshToken || req.headers['x-refresh-token'] || req.body?.refreshToken
     const result = await userService.refreshToken(clientRefreshToken)
     res.cookie('accessToken', result.accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: ms('14d')
+    })
+    // ROTATION: set luôn cookie refreshToken mới (token cũ đã bị thu hồi ở service)
+    res.cookie('refreshToken', result.refreshToken, {
       httpOnly: true,
       secure: true,
       sameSite: 'none',

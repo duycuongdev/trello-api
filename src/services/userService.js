@@ -9,9 +9,42 @@ import { brevoProvider } from '~/providers/BrevoProvider'
 import { jwtProvider } from '~/providers/JwtProvider'
 import { env } from '~/config/environment'
 import { cloudinaryProvider } from '~/providers/CloundinaryProvider'
+import { refreshTokenModel } from '~/models/refreshTokenModel'
+import { withTransaction } from '~/utils/withTransaction'
 import { OAuth2Client } from 'google-auth-library'
+import ms from 'ms'
 
 const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID)
+
+/**
+ * Tạo cặp accessToken + refreshToken mới cho user và LƯU BẢN GHI refresh token vào DB
+ * (để có thể rotate/thu hồi; chỉ lưu hash của token, không lưu token gốc)
+ */
+const issueTokenPair = async (user) => {
+  const userInfo = { _id: user._id, email: user.email }
+
+  // jti (JWT ID): định danh duy nhất cho từng token. Nếu không có, 2 token sinh ra
+  // trong cùng 1 giây cho cùng user sẽ GIỐNG HỆT nhau (trùng iat + payload)
+  // => vi phạm unique index refresh_tokens và token bị tái sử dụng vô tình.
+  const accessToken = jwtProvider.generateToken(
+    { ...userInfo, jti: uuidv4() },
+    env.ACCESS_TOKEN_SECRET_SIGNATURE,
+    env.ACCESS_TOKEN_LIFE
+  )
+  const refreshToken = jwtProvider.generateToken(
+    { ...userInfo, jti: uuidv4() },
+    env.REFRESH_TOKEN_SECRET_SIGNATURE,
+    env.REFRESH_TOKEN_LIFE
+  )
+
+  await refreshTokenModel.createNew({
+    userId: user._id.toString(),
+    token: refreshToken,
+    expiresAt: Date.now() + ms(env.REFRESH_TOKEN_LIFE || '14d')
+  })
+
+  return { accessToken, refreshToken }
+}
 
 const createNew = async (reqBody) => {
   try {
@@ -189,20 +222,8 @@ const login = async (reqBody) => {
     }
 
     // Nếu mọi thứ ok thì bắt đầu tạo Tokens đăng nhập để trả về cho phía FE
-    // Thông tin sẽ đính kèm trong JWT Token bao gồm _id và email của user
-    const userInfo = { _id: existUser._id, email: existUser.email }
-
-    // Tạo ra 2 loại token, accessToken và refreshToken để trả về cho phía FE
-    const accessToken = jwtProvider.generateToken(
-      userInfo,
-      env.ACCESS_TOKEN_SECRET_SIGNATURE,
-      env.ACCESS_TOKEN_LIFE
-    )
-    const refreshToken = jwtProvider.generateToken(
-      userInfo,
-      env.REFRESH_TOKEN_SECRET_SIGNATURE,
-      env.REFRESH_TOKEN_LIFE
-    )
+    // (refreshToken được lưu bản ghi vào DB để rotate/thu hồi)
+    const { accessToken, refreshToken } = await issueTokenPair(existUser)
 
     // Trả về thông tin của user kèm theo 2 cái token vừa tạo ra
     return { ...pickUser(existUser), accessToken, refreshToken }
@@ -210,30 +231,34 @@ const login = async (reqBody) => {
 }
 
 const refreshToken = async (clientRefreshToken) => {
-  try {
-    // Verify / giải mã cái refresh token xem có hợp lệ không
-    const refreshTokenDecoded = await jwtProvider.verifyToken(clientRefreshToken, env.REFRESH_TOKEN_SECRET_SIGNATURE)
+  // Verify / giải mã cái refresh token xem có hợp lệ không (chữ ký + hạn dùng JWT)
+  const refreshTokenDecoded = await jwtProvider.verifyToken(clientRefreshToken, env.REFRESH_TOKEN_SECRET_SIGNATURE)
 
-    // Kiểm tra xem user có thực sự còn tồn tại trong DB và chưa bị xóa / khóa tài khoản
-    const existUser = await userModel.findOneById(refreshTokenDecoded._id)
-    if (!existUser || existUser._destroy || !existUser.isActive) {
-      throw new ApiError(StatusCodes.UNAUTHORIZED, 'Account not found or has been deactivated!')
+  // Tra cứu bản ghi trong DB: token phải do hệ thống cấp và CHƯA bị thu hồi
+  const storedToken = await refreshTokenModel.findByTokenHash(clientRefreshToken)
+  if (!storedToken || storedToken.revokedAt) {
+    // Token đã bị thu hồi mà vẫn được dùng => dấu hiệu bị đánh cắp (kẻ trộm và chủ token
+    // cùng dùng 1 token cũ) => thu hồi TOÀN BỘ refresh token của user để ép đăng nhập lại
+    if (storedToken && storedToken.revokedAt) {
+      await refreshTokenModel.revokeAllByUserId(storedToken.userId)
     }
+    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Session expired, please sign in again!')
+  }
 
-    const userInfo = {
-      _id: existUser._id,
-      email: existUser.email
-    }
+  // Kiểm tra xem user có thực sự còn tồn tại trong DB và chưa bị xóa / khóa tài khoản
+  const existUser = await userModel.findOneById(refreshTokenDecoded._id)
+  if (!existUser || existUser._destroy || !existUser.isActive) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Account not found or has been deactivated!')
+  }
 
-    // Tạo accessToken mới
-    const accessToken = await jwtProvider.generateToken(
-      userInfo,
-      env.ACCESS_TOKEN_SECRET_SIGNATURE,
-      env.ACCESS_TOKEN_LIFE
-    )
+  // ROTATION: cấp cặp token mới rồi thu hồi token cũ trong 1 transaction (atomic)
+  // Token cũ bị đánh dấu revoked kèm replacedByHash => mỗi refresh token chỉ dùng được 1 lần
+  const { accessToken, refreshToken: newRefreshToken } = await issueTokenPair(existUser)
+  await withTransaction(async (session) => {
+    await refreshTokenModel.revokeByTokenHash(clientRefreshToken, newRefreshToken, { session })
+  })
 
-    return { accessToken }
-  } catch (error) { throw error }
+  return { accessToken, refreshToken: newRefreshToken }
 }
 
 const update = async (userId, reqBody, userAvatarFile) => {
@@ -254,6 +279,8 @@ const update = async (userId, reqBody, userAvatarFile) => {
       }
       // Nếu đúng thì tiến hành update password mới
       updatedUser = await userModel.update(existUser._id, { password: bcrypt.hashSync(reqBody.new_password, 8) })
+      // Đổi mật khẩu => thu hồi toàn bộ refresh token đang có, ép mọi phiên đăng nhập khác phải đăng nhập lại
+      await refreshTokenModel.revokeAllByUserId(existUser._id)
     } else if (userAvatarFile) {
       // upload avatar file on cloudinary
       const uploadResult = await cloudinaryProvider.streamUpload(userAvatarFile.buffer, 'trello-users')
@@ -324,21 +351,26 @@ const googleLogin = async (reqBody) => {
       existUser = await userModel.findOneById(createdUser.insertedId)
     }
 
-    // Tạo cặp token accessToken và refreshToken
-    const userInfo = { _id: existUser._id, email: existUser.email }
-    const accessToken = await jwtProvider.generateToken(
-      userInfo,
-      env.ACCESS_TOKEN_SECRET_SIGNATURE,
-      env.ACCESS_TOKEN_LIFE
-    )
-    const refreshToken = await jwtProvider.generateToken(
-      userInfo,
-      env.REFRESH_TOKEN_SECRET_SIGNATURE,
-      env.REFRESH_TOKEN_LIFE
-    )
+    // Tạo cặp token accessToken và refreshToken (có lưu bản ghi để rotate/thu hồi)
+    const { accessToken, refreshToken } = await issueTokenPair(existUser)
 
     return { ...pickUser(existUser), accessToken, refreshToken }
   } catch (error) { throw error }
+}
+
+/**
+ * Đăng xuất: thu hồi refresh token hiện tại (nếu có) để nó không thể refresh nữa.
+ * Không throw - logout luôn thành công từ góc nhìn client.
+ */
+const logout = async (clientRefreshToken) => {
+  try {
+    if (clientRefreshToken) {
+      await refreshTokenModel.revokeByTokenHash(clientRefreshToken)
+    }
+    return { loggedOut: true }
+  } catch (error) {
+    return { loggedOut: true }
+  }
 }
 
 export const userService = {
@@ -347,5 +379,6 @@ export const userService = {
   login,
   googleLogin,
   refreshToken,
-  update
+  update,
+  logout
 }
