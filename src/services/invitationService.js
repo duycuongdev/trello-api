@@ -6,6 +6,7 @@ import { invitationModel } from '~/models/invitationModel'
 import { cardModel } from '~/models/cardModel'
 import { INVITATION_TYPES, BOARD_INVITATION_STATUS } from '~/utils/constants'
 import { pickUser } from '~/utils/formatter'
+import { withTransaction } from '~/utils/withTransaction'
 
 const createNewBoardInvitation = async (reqBody, inviterId) => {
   try {
@@ -128,13 +129,17 @@ const updateBoardInvitation = async (userId, invitationId, status) => {
       }
     }
 
-    const updatedInvitation = await invitationModel.update(invitationId, updateData)
+    // Update trạng thái lời mời + push member vào board phải atomic:
+    // nếu chỉ xong 1 thao tác sẽ sinh lời mời "accepted" nhưng user không vào được board (hoặc ngược lại)
+    return await withTransaction(async (session) => {
+      const updatedInvitation = await invitationModel.update(invitationId, updateData, { session })
 
-    if (updatedInvitation.boardInvitation.status === BOARD_INVITATION_STATUS.ACCEPTED) {
-      await boardModel.pushMemberIds(boardId, userId)
-    }
+      if (updatedInvitation.boardInvitation.status === BOARD_INVITATION_STATUS.ACCEPTED) {
+        await boardModel.pushMemberIds(boardId, userId, { session })
+      }
 
-    return updatedInvitation
+      return updatedInvitation
+    })
   } catch (error) { throw error }
 }
 

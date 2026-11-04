@@ -26,7 +26,7 @@ const validateBeforeCreate = async (data) => {
   return await COLUMN_COLLECTION_SCHEMA.validateAsync(data, { abortEarly: false })
 }
 
-const createNew = async (data) => {
+const createNew = async (data, { session } = {}) => {
   try {
     const validData = await validateBeforeCreate(data)
     // biến đổi 1 số dữ liệu liên quan đến objectId chuẩn chỉnh
@@ -34,32 +34,32 @@ const createNew = async (data) => {
       ...validData,
       boardId: new ObjectId(validData.boardId)
     }
-    const createColumn = await GET_DB().collection(COLUMN_COLLECTION_NAME).insertOne(newColumnToAdd)
+    const createColumn = await GET_DB().collection(COLUMN_COLLECTION_NAME).insertOne(newColumnToAdd, { session })
     return createColumn
   } catch (error) { throw new Error(error) }
 }
 
-const findOneById = async (columnId) => {
+const findOneById = async (columnId, { session } = {}) => {
   try {
-    const result = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOne({ _id: new ObjectId(columnId) })
+    const result = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOne({ _id: new ObjectId(columnId) }, { session })
     return result
   } catch (error) { throw new Error(error) }
 }
 
 // nghiệm vụ của function này là push 1 cái giá trị cardid vào cuối mảng cardOrderIds
-const pushCardOrderIds = async (card) => {
+const pushCardOrderIds = async (card, { session } = {}) => {
   try {
     const result = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(card.columnId) },
       { $push: { cardOrderIds: new ObjectId(card._id) } },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
   } catch (error) { throw new Error(error) }
 }
 
-const update = async (columnId, updateData) => {
+const update = async (columnId, updateData, { session } = {}) => {
   try {
     // lọc nhưng field không cho phép cập nhật linh tinh
     Object.keys(updateData).forEach(fieldName => {
@@ -77,34 +77,34 @@ const update = async (columnId, updateData) => {
       { _id: new ObjectId(columnId) },
       { $set: updateData },
       // trả về kết quả mới sau khi cập nhật
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
   } catch (error) { throw new Error(error) }
 }
 
-const deleteOneById = async (columnId) => {
+const deleteOneById = async (columnId, { session } = {}) => {
   try {
-    const result = await GET_DB().collection(COLUMN_COLLECTION_NAME).deleteOne({ _id: new ObjectId(columnId) })
+    const result = await GET_DB().collection(COLUMN_COLLECTION_NAME).deleteOne({ _id: new ObjectId(columnId) }, { session })
     return result
   } catch (error) { throw new Error(error) }
 }
 
-const pullCardOrderIds = async (card) => {
+const pullCardOrderIds = async (card, { session } = {}) => {
   try {
     const result = await GET_DB().collection(COLUMN_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(card.columnId) },
       { $pull: { cardOrderIds: new ObjectId(card._id) } },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
     return result
   } catch (error) { throw new Error(error) }
 }
 
-const deleteManyByBoardId = async (boardId) => {
+const deleteManyByBoardId = async (boardId, { session } = {}) => {
   try {
-    const result = await GET_DB().collection(COLUMN_COLLECTION_NAME).deleteMany({ boardId: new ObjectId(boardId) })
+    const result = await GET_DB().collection(COLUMN_COLLECTION_NAME).deleteMany({ boardId: new ObjectId(boardId) }, { session })
     return result
   } catch (error) { throw new Error(error) }
 }

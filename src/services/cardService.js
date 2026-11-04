@@ -8,6 +8,7 @@ import { GET_DB } from '~/config/mongodb'
 import { ObjectId } from 'mongodb'
 import { v4 as uuidv4 } from 'uuid'
 import { authorizationService } from '~/services/authorizationService'
+import { withTransaction } from '~/utils/withTransaction'
 
 const createNew = async (userId, reqBody) => {
   try {
@@ -21,14 +22,19 @@ const createNew = async (userId, reqBody) => {
     const newCard = {
       ...reqBody
     }
-    const createCard = await cardModel.createNew(newCard)
-    const getNewCard = await cardModel.findOneById(createCard.insertedId)
 
-    if (getNewCard) {
-      await columnModel.pushCardOrderIds(getNewCard)
-    }
+    // Insert card + push vào cardOrderIds của column phải cùng thành công (atomic),
+    // nếu không sẽ sinh card "ma" tồn tại nhưng không hiển thị trong column
+    return await withTransaction(async (session) => {
+      const createCard = await cardModel.createNew(newCard, { session })
+      const getNewCard = await cardModel.findOneById(createCard.insertedId, { session })
 
-    return getNewCard
+      if (getNewCard) {
+        await columnModel.pushCardOrderIds(getNewCard, { session })
+      }
+
+      return getNewCard
+    })
   } catch (error) { throw error }
 }
 
@@ -164,13 +170,16 @@ const deleteItem = async (cardId, userId) => {
     // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được xóa card
     const { card: targetCard } = await authorizationService.requireBoardAccessByCardId(userId, cardId)
 
-    // Xóa card
-    await cardModel.deleteOneById(cardId)
+    // Xóa card + pull khỏi cardOrderIds phải atomic
+    return await withTransaction(async (session) => {
+      // Xóa card
+      await cardModel.deleteOneById(cardId, { session })
 
-    // Xóa cardId khỏi mảng cardOrderIds của column chứa nó
-    await columnModel.pullCardOrderIds(targetCard)
+      // Xóa cardId khỏi mảng cardOrderIds của column chứa nó
+      await columnModel.pullCardOrderIds(targetCard, { session })
 
-    return { deleteResult: 'Card deleted successfully!' }
+      return { deleteResult: 'Card deleted successfully!' }
+    })
   } catch (error) { throw error }
 }
 
@@ -227,30 +236,33 @@ const copyCard = async (userId, cardId, reqBody) => {
       comments: [] // Comments are not copied
     }
 
-    const createCardResult = await cardModel.createNew(newCardData)
-    const newCard = await cardModel.findOneById(createCardResult.insertedId)
+    // Insert card copy + cập nhật cardOrderIds của column đích phải atomic
+    return await withTransaction(async (session) => {
+      const createCardResult = await cardModel.createNew(newCardData, { session })
+      const newCard = await cardModel.findOneById(createCardResult.insertedId, { session })
 
-    if (newCard) {
-      // Insert into target column cardOrderIds at specific position if given, else push
-      const currentOrder = (targetColumn.cardOrderIds || [])
-        .filter(id => !id.toString().includes('placeholder-card'))
-        .map(id => id.toString())
+      if (newCard) {
+        // Insert into target column cardOrderIds at specific position if given, else push
+        const currentOrder = (targetColumn.cardOrderIds || [])
+          .filter(id => !id.toString().includes('placeholder-card'))
+          .map(id => id.toString())
 
-      const newCardIdStr = newCard._id.toString()
-      const newOrder = [...currentOrder]
+        const newCardIdStr = newCard._id.toString()
+        const newOrder = [...currentOrder]
 
-      if (typeof position === 'number' && position >= 0 && position <= newOrder.length) {
-        newOrder.splice(position, 0, newCardIdStr)
-      } else {
-        newOrder.push(newCardIdStr)
+        if (typeof position === 'number' && position >= 0 && position <= newOrder.length) {
+          newOrder.splice(position, 0, newCardIdStr)
+        } else {
+          newOrder.push(newCardIdStr)
+        }
+
+        await columnModel.update(columnId, {
+          cardOrderIds: newOrder
+        }, { session })
       }
 
-      await columnModel.update(columnId, {
-        cardOrderIds: newOrder
-      })
-    }
-
-    return newCard
+      return newCard
+    })
   } catch (error) { throw error }
 }
 
@@ -259,15 +271,18 @@ const archiveCard = async (userId, cardId) => {
     // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được lưu trữ (fix IDOR)
     const { card } = await authorizationService.requireBoardAccessByCardId(userId, cardId)
 
-    const updatedCard = await cardModel.update(cardId, {
-      _destroy: true,
-      updatedAt: Date.now()
+    // Update card + pull khỏi cardOrderIds phải atomic
+    return await withTransaction(async (session) => {
+      const updatedCard = await cardModel.update(cardId, {
+        _destroy: true,
+        updatedAt: Date.now()
+      }, { session })
+
+      // Pull cardId from column cardOrderIds
+      await columnModel.pullCardOrderIds(card, { session })
+
+      return updatedCard
     })
-
-    // Pull cardId from column cardOrderIds
-    await columnModel.pullCardOrderIds(card)
-
-    return updatedCard
   } catch (error) { throw error }
 }
 
@@ -292,15 +307,18 @@ const restoreCard = async (userId, cardId) => {
       finalColumnId = firstActiveCol._id
     }
 
-    const updatedCard = await cardModel.update(cardId, {
-      _destroy: false,
-      columnId: finalColumnId,
-      updatedAt: Date.now()
+    // Update card + push vào cardOrderIds phải atomic
+    return await withTransaction(async (session) => {
+      const updatedCard = await cardModel.update(cardId, {
+        _destroy: false,
+        columnId: finalColumnId,
+        updatedAt: Date.now()
+      }, { session })
+
+      await columnModel.pushCardOrderIds({ ...card, columnId: finalColumnId }, { session })
+
+      return updatedCard
     })
-
-    await columnModel.pushCardOrderIds({ ...card, columnId: finalColumnId })
-
-    return updatedCard
   } catch (error) { throw error }
 }
 

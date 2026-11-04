@@ -79,7 +79,7 @@ const validateBeforeCreate = async (data) => {
   return await CARD_COLLECTION_SCHEMA.validateAsync(data, { abortEarly: false })
 }
 
-const createNew = async (data) => {
+const createNew = async (data, { session } = {}) => {
   try {
     const validData = await validateBeforeCreate(data)
     const newCardToAdd = {
@@ -89,19 +89,19 @@ const createNew = async (data) => {
       memberIds: (validData.memberIds || []).map(id => new ObjectId(id))
     }
 
-    const createCard = await GET_DB().collection(CARD_COLLECTION_NAME).insertOne(newCardToAdd)
+    const createCard = await GET_DB().collection(CARD_COLLECTION_NAME).insertOne(newCardToAdd, { session })
     return createCard
   } catch (error) { throw new Error(error) }
 }
 
-const findOneById = async (cardId) => {
+const findOneById = async (cardId, { session } = {}) => {
   try {
-    const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) })
+    const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOne({ _id: new ObjectId(cardId) }, { session })
     return result
   } catch (error) { throw new Error(error) }
 }
 
-const update = async (cardId, updateData) => {
+const update = async (cardId, updateData, { session } = {}) => {
   try {
     // lọc những field không cho phép cập nhật linh tinh
     Object.keys(updateData).forEach(fieldName => {
@@ -116,16 +116,16 @@ const update = async (cardId, updateData) => {
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId) },
       { $set: updateData },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
   } catch (error) { throw new Error(error) }
 }
 
-const deleteManyByColumnId = async (columnId) => {
+const deleteManyByColumnId = async (columnId, { session } = {}) => {
   try {
-    const result = await GET_DB().collection(CARD_COLLECTION_NAME).deleteMany({ columnId: new ObjectId(columnId) })
+    const result = await GET_DB().collection(CARD_COLLECTION_NAME).deleteMany({ columnId: new ObjectId(columnId) }, { session })
     return result
   } catch (error) { throw new Error(error) }
 }
@@ -136,7 +136,7 @@ const unshiftNewComment = async (cardId, commentData) => {
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId) },
       { $push: { comments: { $each: [commentData], $position: 0 } } },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
@@ -168,7 +168,7 @@ const updateComment = async (cardId, commentId, content, targetComment) => {
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       query,
       { $set: updateFields },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
@@ -190,7 +190,7 @@ const deleteComment = async (cardId, commentId, targetComment) => {
           comments: pullCondition
         }
       },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
@@ -203,7 +203,7 @@ const unshiftNewAttachment = async (cardId, attachmentData) => {
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId) },
       { $push: { attachments: { $each: [attachmentData], $position: 0 } } },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
     return result
   } catch (error) { throw new Error(error) }
@@ -215,7 +215,7 @@ const deleteAttachment = async (cardId, attachmentId) => {
     const result = await GET_DB().collection(CARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(cardId) },
       { $pull: { attachments: { _id: attachmentId } } },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
     return result
   } catch (error) { throw new Error(error) }
@@ -238,7 +238,7 @@ const updateMembers = async (cardId, incomingMemberInfo) => {
       .findOneAndUpdate(
         { _id: new ObjectId(cardId) },
         updateCondition,
-        { returnDocument: 'after' }
+        { returnDocument: 'after', session }
       )
 
     return result
@@ -247,16 +247,16 @@ const updateMembers = async (cardId, incomingMemberInfo) => {
   }
 }
 
-const deleteOneById = async (cardId) => {
+const deleteOneById = async (cardId, { session } = {}) => {
   try {
-    const result = await GET_DB().collection(CARD_COLLECTION_NAME).deleteOne({ _id: new ObjectId(cardId) })
+    const result = await GET_DB().collection(CARD_COLLECTION_NAME).deleteOne({ _id: new ObjectId(cardId) }, { session })
     return result
   } catch (error) { throw new Error(error) }
 }
 
-const deleteManyByBoardId = async (boardId) => {
+const deleteManyByBoardId = async (boardId, { session } = {}) => {
   try {
-    const result = await GET_DB().collection(CARD_COLLECTION_NAME).deleteMany({ boardId: new ObjectId(boardId) })
+    const result = await GET_DB().collection(CARD_COLLECTION_NAME).deleteMany({ boardId: new ObjectId(boardId) }, { session })
     return result
   } catch (error) { throw new Error(error) }
 }

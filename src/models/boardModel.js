@@ -114,12 +114,12 @@ const getDetails = async (userId, boardId) => {
 }
 
 // nghiệm vụ của function này là push 1 cái giá trị columnid vào cuối mảng columnOrderIds
-const pushColumnOrderIds = async (column) => {
+const pushColumnOrderIds = async (column, { session } = {}) => {
   try {
     const result = await GET_DB().collection(BOARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(column.boardId) },
       { $push: { columnOrderIds: new ObjectId(column._id) } },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
@@ -127,19 +127,19 @@ const pushColumnOrderIds = async (column) => {
 }
 
 // lấy 1 phần tử columnId ra khỏi mảng columnOrderIds
-const pullColumnOrderIds = async (column) => {
+const pullColumnOrderIds = async (column, { session } = {}) => {
   try {
     const result = await GET_DB().collection(BOARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(column.boardId) },
       { $pull: { columnOrderIds: new ObjectId(column._id) } },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
   } catch (error) { throw new Error(error) }
 }
 
-const update = async (boardId, updateData) => {
+const update = async (boardId, updateData, { session } = {}) => {
   try {
     // lọc nhưng field không cho phép cập nhật linh tinh
     Object.keys(updateData).forEach(fieldName => {
@@ -156,7 +156,7 @@ const update = async (boardId, updateData) => {
     const result = await GET_DB().collection(BOARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(boardId) },
       { $set: updateData },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
@@ -212,33 +212,33 @@ const getBoards = async (userId, page, itemsPerPage, queryFilter) => {
   } catch (error) { throw new Error(error) }
 }
 
-const pushMemberIds = async (boardId, userId) => {
+const pushMemberIds = async (boardId, userId, { session } = {}) => {
   try {
     const result = await GET_DB().collection(BOARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(boardId) },
       { $push: { memberIds: new ObjectId(userId) } },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
   } catch (error) { throw new Error(error) }
 }
 
-const pullMemberIds = async (boardId, userId) => {
+const pullMemberIds = async (boardId, userId, { session } = {}) => {
   try {
     const result = await GET_DB().collection(BOARD_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(boardId) },
       { $pull: { memberIds: new ObjectId(userId) } },
-      { returnDocument: 'after' }
+      { returnDocument: 'after', session }
     )
 
     return result
   } catch (error) { throw new Error(error) }
 }
 
-const deleteOneById = async (boardId) => {
+const deleteOneById = async (boardId, { session } = {}) => {
   try {
-    const result = await GET_DB().collection(BOARD_COLLECTION_NAME).deleteOne({ _id: new ObjectId(boardId) })
+    const result = await GET_DB().collection(BOARD_COLLECTION_NAME).deleteOne({ _id: new ObjectId(boardId) }, { session })
     return result
   } catch (error) { throw new Error(error) }
 }
