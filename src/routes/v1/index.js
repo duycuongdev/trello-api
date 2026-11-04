@@ -1,11 +1,13 @@
 import express from 'express'
 import { StatusCodes } from 'http-status-codes'
+import swaggerUi from 'swagger-ui-express'
 import { boardRouter } from './boardRoute'
 import { columnRouter } from './columnRouter'
 import { cardRouter } from './cardRouter'
 import { userRoute } from './userRoute'
 import { invitationRoute } from './invitationRoute'
 import { GET_DB } from '~/config/mongodb'
+import { openApiSpec } from '~/docs/openApi'
 
 const Router = express.Router()
 
@@ -13,6 +15,15 @@ const Router = express.Router()
 Router.get('/status', (req, res) => {
   res.status(StatusCodes.OK).json({ message: 'APIs V1 are ready to use' })
 })
+
+// Tài liệu API: Swagger UI tại /v1/docs | JSON spec tại /v1/docs.json
+Router.get('/docs.json', (req, res) => {
+  res.status(StatusCodes.OK).json(openApiSpec)
+})
+Router.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, {
+  customSiteTitle: 'Trello Clone API Docs',
+  customCss: '.swagger-ui .topbar { display: none }'
+}))
 
 /**
  * Health check cho monitoring (UptimeRobot, Render Health Check Path, ...)
