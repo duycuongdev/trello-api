@@ -1,4 +1,5 @@
 import { GET_DB } from '~/config/mongodb'
+import { logger } from '~/utils/logger'
 
 /**
  * Khai báo các index cho các collection
@@ -65,11 +66,11 @@ export const CREATE_DB_INDEXES = async () => {
     try {
       const created = await db.collection(collection).createIndexes(indexes)
       // eslint-disable-next-line no-console
-      console.log(`[DB Indexes] ${collection}: ${created.numIndexesAfter ?? 'ok'} indexes ensured`)
+      logger.info(`[DB Indexes] ${collection}: ${created.numIndexesAfter ?? 'ok'} indexes ensured`)
     } catch (error) {
       // Không chặn startup: index chỉ là tối ưu / ràng buộc, lỗi thường do dữ liệu cũ vi phạm unique
       // eslint-disable-next-line no-console
-      console.error(`[DB Indexes] FAILED on ${collection}:`, error?.message || error)
+      logger.error(`[DB Indexes] FAILED on ${collection}:`, error?.message || error)
     }
   }
 }

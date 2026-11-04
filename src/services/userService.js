@@ -1,4 +1,5 @@
 import { StatusCodes } from 'http-status-codes'
+import { logger } from '~/utils/logger'
 import ApiError from '~/utils/ApiError'
 import { userModel } from '~/models/userModel'
 import bcrypt from 'bcryptjs'
@@ -86,7 +87,7 @@ const createNew = async (reqBody) => {
 
     // In link xác thực ra console server (Render Logs) để tiện kích hoạt ngay
     // eslint-disable-next-line no-console
-    console.log(`🔗 [VERIFICATION LINK] for ${userToProcess.email}: ${verifiCationLink}`)
+    logger.info(`[VERIFICATION LINK] for ${userToProcess.email}: ${verifiCationLink}`)
 
     const customSubject = 'Verify your email address - Trello'
     const recipientName = userToProcess.displayName || userToProcess.username || userToProcess.email.split('@')[0]
@@ -175,7 +176,7 @@ const createNew = async (reqBody) => {
       await brevoProvider.sendEmail(userToProcess.email, customSubject, htmlContent)
     } catch (emailError) {
       // eslint-disable-next-line no-console
-      console.error('⚠️ Brevo sendEmail failed:', emailError?.response?.body || emailError?.message || emailError)
+      logger.error('Brevo sendEmail failed:', emailError?.response?.body || emailError?.message || emailError)
       // Không để lỗi 401 của Brevo tràn ra làm API trả 401 (gây logout ở FE)
       throw new ApiError(
         StatusCodes.BAD_GATEWAY,
@@ -395,7 +396,7 @@ const forgotPassword = async (reqBody) => {
     const resetLink = `${WEBSITE_DOMAINS}/reset-password?email=${encodeURIComponent(existUser.email)}&token=${resetToken}`
 
     // eslint-disable-next-line no-console
-    console.log(`🔑 [PASSWORD RESET LINK] for ${existUser.email}: ${resetLink}`)
+    logger.info(`[PASSWORD RESET LINK] for ${existUser.email}: ${resetLink}`)
 
     const customSubject = 'Reset your password - Trello'
     const htmlContent = `
@@ -453,7 +454,7 @@ const forgotPassword = async (reqBody) => {
       await brevoProvider.sendEmail(existUser.email, customSubject, htmlContent)
     } catch (emailError) {
       // eslint-disable-next-line no-console
-      console.error('⚠️ Brevo sendEmail (password reset) failed:', emailError?.response?.body || emailError?.message || emailError)
+      logger.error('Brevo sendEmail (password reset) failed:', emailError?.response?.body || emailError?.message || emailError)
       throw new ApiError(
         StatusCodes.BAD_GATEWAY,
         'Failed to send the password reset email. Please try again later.'
