@@ -373,6 +373,127 @@ const logout = async (clientRefreshToken) => {
   }
 }
 
+/**
+ * Yêu cầu đặt lại mật khẩu: sinh reset token (hạn 15 phút) và gửi email hướng dẫn.
+ * Chống email enumeration: dù email có tồn tại hay không, response luôn giống nhau.
+ */
+const forgotPassword = async (reqBody) => {
+  const GENERIC_MESSAGE = 'If that email address is in our database, we have sent a password reset link to it.'
+  try {
+    const existUser = await userModel.findOneByEmail(reqBody.email)
+    if (!existUser || existUser._destroy || !existUser.isActive) {
+      return { message: GENERIC_MESSAGE }
+    }
+
+    // Sinh token reset (uuid) và lưu kèm hạn dùng 15 phút
+    const resetToken = uuidv4()
+    await userModel.update(existUser._id, {
+      resetPasswordToken: resetToken,
+      resetPasswordExpire: Date.now() + ms('15m')
+    })
+
+    const resetLink = `${WEBSITE_DOMAINS}/reset-password?email=${encodeURIComponent(existUser.email)}&token=${resetToken}`
+
+    // eslint-disable-next-line no-console
+    console.log(`🔑 [PASSWORD RESET LINK] for ${existUser.email}: ${resetLink}`)
+
+    const customSubject = 'Reset your password - Trello'
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head><meta charset="utf-8"><title>Reset your password</title></head>
+      <body style="margin: 0; padding: 0; background-color: #f4f5f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #172b4d;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f4f5f7; padding: 40px 15px;">
+          <tr><td align="center">
+            <table width="100%" max-width="560" border="0" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #ebecf0;">
+              <tr>
+                <td align="center" style="background: linear-gradient(135deg, #0052cc 0%, #0c66e4 100%); padding: 32px 20px;">
+                  <span style="font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">Trello</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 36px 32px 24px 32px;">
+                  <h2 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 700;">Reset your password 🔑</h2>
+                  <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #42526e;">
+                    Hi <strong>${existUser.displayName || existUser.username || existUser.email.split('@')[0]}</strong>,
+                  </p>
+                  <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #42526e;">
+                    We received a request to reset the password for your account (<strong>${existUser.email}</strong>).
+                    Click the button below to choose a new password. This link is valid for <strong>15 minutes</strong>.
+                  </p>
+                  <table border="0" cellspacing="0" cellpadding="0" style="margin: 28px 0 10px 0;">
+                    <tr>
+                      <td align="center" style="border-radius: 6px;" bgcolor="#0052cc">
+                        <a href="${resetLink}" target="_self" style="font-size: 15px; color: #ffffff; text-decoration: none; border-radius: 6px; padding: 14px 32px; display: inline-block; font-weight: 600;">
+                          Reset Password
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="margin: 16px 0 0 0; font-size: 13px; color: #8993a4;">
+                    If you did not request a password reset, you can safely ignore this email — your password will not change.
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td align="center" style="padding: 24px 32px; background-color: #fafbfc;">
+                  <p style="margin: 0; font-size: 12px; color: #8993a4;">
+                    © ${new Date().getFullYear()} Trello. All rights reserved.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td></tr>
+        </table>
+      </body>
+      </html>
+    `
+
+    try {
+      await brevoProvider.sendEmail(existUser.email, customSubject, htmlContent)
+    } catch (emailError) {
+      // eslint-disable-next-line no-console
+      console.error('⚠️ Brevo sendEmail (password reset) failed:', emailError?.response?.body || emailError?.message || emailError)
+      throw new ApiError(
+        StatusCodes.BAD_GATEWAY,
+        'Failed to send the password reset email. Please try again later.'
+      )
+    }
+
+    return { message: GENERIC_MESSAGE }
+  } catch (error) { throw error }
+}
+
+/**
+ * Đặt lại mật khẩu bằng reset token: kiểm tra token + hạn dùng, cập nhật mật khẩu mới,
+ * xóa token reset và THU HỒI TOÀN BỘ refresh token (mọi phiên đăng nhập khác bị đẩy ra).
+ */
+const resetPassword = async (reqBody) => {
+  try {
+    const existUser = await userModel.findOneByEmail(reqBody.email)
+    if (!existUser || existUser._destroy) {
+      throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Invalid or expired reset link!')
+    }
+    if (!existUser.resetPasswordToken || existUser.resetPasswordToken !== reqBody.token) {
+      throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Invalid or expired reset link!')
+    }
+    if (!existUser.resetPasswordExpire || Date.now() > existUser.resetPasswordExpire) {
+      throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'This reset link has expired. Please request a new one.')
+    }
+
+    const updatedUser = await userModel.update(existUser._id, {
+      password: bcrypt.hashSync(reqBody.newPassword, 8),
+      resetPasswordToken: null,
+      resetPasswordExpire: null
+    })
+
+    // Mật khẩu vừa thay đổi => mọi refresh token cũ đều vô hiệu, ép đăng nhập lại ở mọi thiết bị
+    await refreshTokenModel.revokeAllByUserId(existUser._id)
+
+    return pickUser(updatedUser)
+  } catch (error) { throw error }
+}
+
 export const userService = {
   createNew,
   verifyAccount,
@@ -380,5 +501,7 @@ export const userService = {
   googleLogin,
   refreshToken,
   update,
-  logout
+  logout,
+  forgotPassword,
+  resetPassword
 }

@@ -74,10 +74,40 @@ const googleLogin = async (req, res, next) => {
   }
 }
 
+const forgotPassword = async (req, res, next) => {
+  const correctCondition = Joi.object({
+    email: Joi.string().required().pattern(EMAIL_RULE).message(EMAIL_RULE_MESSAGE)
+  })
+
+  try {
+    await correctCondition.validateAsync(req.body, { abortEarly: false })
+    next()
+  } catch (error) {
+    next(new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, new Error(error).message))
+  }
+}
+
+const resetPassword = async (req, res, next) => {
+  const correctCondition = Joi.object({
+    email: Joi.string().required().pattern(EMAIL_RULE).message(EMAIL_RULE_MESSAGE),
+    token: Joi.string().required().trim().strict(),
+    newPassword: Joi.string().required().pattern(PASSWORD_RULE).message(`newPassword: ${PASSWORD_RULE_MESSAGE}`)
+  })
+
+  try {
+    await correctCondition.validateAsync(req.body, { abortEarly: false })
+    next()
+  } catch (error) {
+    next(new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, new Error(error).message))
+  }
+}
+
 export const userValidation = {
   createNew,
   verifyAccount,
   login,
   googleLogin,
-  update
+  update,
+  forgotPassword,
+  resetPassword
 }

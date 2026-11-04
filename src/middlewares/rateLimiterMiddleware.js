@@ -51,9 +51,22 @@ const apiLimiter = rateLimit({
   legacyHeaders: false
 })
 
+// 5. Chống spam yêu cầu đặt lại mật khẩu (lạm dụng gửi email): tối đa 5 lần trong 1 giờ trên mỗi IP
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  statusCode: StatusCodes.TOO_MANY_REQUESTS,
+  message: {
+    message: 'Too many password reset requests from this IP. Please try again after 1 hour.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+})
+
 export const rateLimiterMiddleware = {
   loginLimiter,
   registerLimiter,
   invitationLimiter,
+  passwordResetLimiter,
   apiLimiter
 }
