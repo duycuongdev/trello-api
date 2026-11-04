@@ -11,6 +11,7 @@ import { GET_DB } from '~/config/mongodb'
 import { ObjectId } from 'mongodb'
 import { DEFAULT_PAGE, DEFAULT_ITEMS_PER_PAGE } from '~/utils/constants'
 import { authorizationService } from '~/services/authorizationService'
+import { withTransaction } from '~/utils/withTransaction'
 
 const createNew = async (userId, reqBody) => {
   try {
@@ -103,21 +104,24 @@ const moveCardToDifferentColumn = async (userId, reqBody) => {
       throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid column information!')
     }
 
-    await columnModel.update(reqBody.prevColumnId, {
-      cardOrderIds: reqBody.prevCardOrderIds,
-      updatedAt: Date.now()
-    })
+    // 3 thao tác ghi phải cùng thành công hoặc cùng thất bại (atomic), nếu không cardOrderIds sẽ lệch nhau
+    return await withTransaction(async (session) => {
+      await columnModel.update(reqBody.prevColumnId, {
+        cardOrderIds: reqBody.prevCardOrderIds,
+        updatedAt: Date.now()
+      }, { session })
 
-    await columnModel.update(reqBody.nextColumnId, {
-      cardOrderIds: reqBody.nextCardOrderIds,
-      updatedAt: Date.now()
-    })
+      await columnModel.update(reqBody.nextColumnId, {
+        cardOrderIds: reqBody.nextCardOrderIds,
+        updatedAt: Date.now()
+      }, { session })
 
-    await cardModel.update(reqBody.currentCardId, {
-      columnId: reqBody.nextColumnId
-    })
+      await cardModel.update(reqBody.currentCardId, {
+        columnId: reqBody.nextColumnId
+      }, { session })
 
-    return { updateResult: 'Successfully' }
+      return { updateResult: 'Successfully' }
+    })
   } catch (error) { throw error }
 }
 
@@ -263,19 +267,22 @@ const deleteBoard = async (userId, boardId) => {
       throw new ApiError(StatusCodes.FORBIDDEN, 'Only board owners can permanently delete this board!')
     }
 
-    // 1. Delete board document
-    await boardModel.deleteOneById(boardId)
+    // Cascade delete 4 collection phải là atomic: xóa dở sẽ để lại columns/cards/invitations mồ côi
+    return await withTransaction(async (session) => {
+      // 1. Delete board document
+      await boardModel.deleteOneById(boardId, { session })
 
-    // 2. Cascading delete columns
-    await columnModel.deleteManyByBoardId(boardId)
+      // 2. Cascading delete columns
+      await columnModel.deleteManyByBoardId(boardId, { session })
 
-    // 3. Cascading delete cards
-    await cardModel.deleteManyByBoardId(boardId)
+      // 3. Cascading delete cards
+      await cardModel.deleteManyByBoardId(boardId, { session })
 
-    // 4. Cascading delete invitations
-    await invitationModel.deleteManyByBoardId(boardId)
+      // 4. Cascading delete invitations
+      await invitationModel.deleteManyByBoardId(boardId, { session })
 
-    return { deleteResult: 'Board and all associated data permanently deleted!' }
+      return { deleteResult: 'Board and all associated data permanently deleted!' }
+    })
   } catch (error) { throw error }
 }
 

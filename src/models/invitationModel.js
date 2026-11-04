@@ -80,7 +80,7 @@ const findOneById = async (invitationId) => {
   }
 }
 
-const update = async (invitationId, updateData) => {
+const update = async (invitationId, updateData, { session } = {}) => {
   try {
     // Lọc những field mà chúng ta không cho phép cập nhật linh tinh
     Object.keys(updateData).forEach(fieldName => {
@@ -100,7 +100,7 @@ const update = async (invitationId, updateData) => {
     const result = await GET_DB().collection(INVITATION_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(invitationId) },
       { $set: updateData },
-      { returnDocument: 'after' } // sẽ trả về kết quả mới sau khi cập nhật
+      { returnDocument: 'after', session } // sẽ trả về kết quả mới sau khi cập nhật
     )
 
     return result
@@ -150,7 +150,7 @@ const findByUser = async (userId) => {
   } catch (error) { throw new Error(error) }
 }
 
-const deleteManyByBoardId = async (boardId) => {
+const deleteManyByBoardId = async (boardId, { session } = {}) => {
   try {
     const result = await GET_DB().collection(INVITATION_COLLECTION_NAME).deleteMany({
       'boardInvitation.boardId': new ObjectId(boardId)
