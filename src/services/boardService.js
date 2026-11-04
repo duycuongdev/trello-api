@@ -1,6 +1,6 @@
 import { slugify } from '~/utils/formatter'
 import { boardModel } from '~/models/boardModel'
-import { cloudinaryProvider } from '~/providers/CloundinaryProvider'
+import { cloudinaryProvider } from '~/providers/CloudinaryProvider'
 import ApiError from '~/utils/ApiError'
 import { StatusCodes } from 'http-status-codes'
 import { cloneDeep } from 'lodash'
