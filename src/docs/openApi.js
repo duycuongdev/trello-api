@@ -263,7 +263,7 @@ export const openApiSpec = {
         security: [{ bearerAuth: [] }, { cookieAuth: [] }],
         parameters: [idParam()],
         requestBody: { content: { 'multipart/form-data': { schema: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, boardBackground: { type: 'string', format: 'binary' } } } } } },
-        responses: { 200: okResponse('Board đã cập nhật', { $ref: '#/components/schemas/Board' }), 403: errorResponse('Không có quyền') },
+        responses: { 200: okResponse('Board đã cập nhật', { $ref: '#/components/schemas/Board' }), 403: errorResponse('Không có quyền') }
       },
       delete: {
         tags: ['Boards'], summary: 'XÓA VĨNH VIỄN board + toàn bộ columns/cards/invitations (atomic transaction)',

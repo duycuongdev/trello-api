@@ -86,7 +86,6 @@ const createNew = async (reqBody) => {
     const verifiCationLink = `${WEBSITE_DOMAINS}/account/verification?email=${userToProcess.email}&token=${userToProcess.verifyToken}`
 
     // In link xác thực ra console server (Render Logs) để tiện kích hoạt ngay
-    // eslint-disable-next-line no-console
     logger.info(`[VERIFICATION LINK] for ${userToProcess.email}: ${verifiCationLink}`)
 
     const customSubject = 'Verify your email address - Trello'
@@ -175,7 +174,6 @@ const createNew = async (reqBody) => {
     try {
       await brevoProvider.sendEmail(userToProcess.email, customSubject, htmlContent)
     } catch (emailError) {
-      // eslint-disable-next-line no-console
       logger.error('Brevo sendEmail failed:', emailError?.response?.body || emailError?.message || emailError)
       // Không để lỗi 401 của Brevo tràn ra làm API trả 401 (gây logout ở FE)
       throw new ApiError(
@@ -396,7 +394,6 @@ const forgotPassword = async (reqBody) => {
 
     const resetLink = `${WEBSITE_DOMAINS}/reset-password?email=${encodeURIComponent(existUser.email)}&token=${resetToken}`
 
-    // eslint-disable-next-line no-console
     logger.info(`[PASSWORD RESET LINK] for ${existUser.email}: ${resetLink}`)
 
     const customSubject = 'Reset your password - Trello'
@@ -454,7 +451,6 @@ const forgotPassword = async (reqBody) => {
     try {
       await brevoProvider.sendEmail(existUser.email, customSubject, htmlContent)
     } catch (emailError) {
-      // eslint-disable-next-line no-console
       logger.error('Brevo sendEmail (password reset) failed:', emailError?.response?.body || emailError?.message || emailError)
       throw new ApiError(
         StatusCodes.BAD_GATEWAY,

@@ -12,6 +12,7 @@ import { ObjectId } from 'mongodb'
 import { DEFAULT_PAGE, DEFAULT_ITEMS_PER_PAGE } from '~/utils/constants'
 import { authorizationService } from '~/services/authorizationService'
 import { withTransaction } from '~/utils/withTransaction'
+import { kickUserFromBoard } from '~/sockets/boardSocket'
 
 const createNew = async (userId, reqBody) => {
   try {
@@ -157,6 +158,10 @@ const removeMember = async (currentUserId, boardId, targetUserId) => {
 
     await boardModel.pullMemberIds(boardId, targetUserId)
     await cardModel.pullMemberFromAllCardsInBoard(boardId, targetUserId)
+
+    // Kick user vừa bị xóa khỏi phòng socket của board + báo cho họ biết (real-time)
+    kickUserFromBoard(targetUserId, boardId)
+
     return { removeResult: 'Member removed successfully!' }
   } catch (error) { throw error }
 }

@@ -16,6 +16,45 @@ import { authorizationService } from '~/services/authorizationService'
 // Lưu trữ người dùng đang online theo từng Board: Map<boardId, Map<socketId, user>>
 const activeBoardUsers = new Map()
 
+// io instance được server.js đăng ký sau khi khởi tạo (để service layer có thể bắn sự kiện)
+let ioInstance = null
+export const setSocketServerInstance = (io) => {
+  ioInstance = io
+}
+
+/**
+ * KICK user khỏi phòng board khi bị remove khỏi board (gọi từ service layer):
+ * - Buộc mọi socket của user đó rời room board_{boardId} + dọn activeBoardUsers
+ * - Thông báo BE_BOARD_MEMBER_REMOVED tới phòng cá nhân của user (room = userId)
+ *   để FE điều hướng ra khỏi bảng + hiện thông báo
+ */
+export const kickUserFromBoard = (userId, boardId) => {
+  if (!ioInstance || !userId || !boardId) return
+
+  const roomName = `board_${boardId}`
+  if (activeBoardUsers.has(boardId)) {
+    const userMap = activeBoardUsers.get(boardId)
+    for (const [socketId, user] of userMap) {
+      if (user._id?.toString() === userId.toString()) {
+        const sock = ioInstance.sockets.sockets.get(socketId)
+        if (sock) {
+          sock.leave(roomName)
+          sock.joinedBoardIds?.delete(boardId)
+        }
+        userMap.delete(socketId)
+      }
+    }
+    if (userMap.size === 0) {
+      activeBoardUsers.delete(boardId)
+    } else {
+      ioInstance.to(roomName).emit('BE_BOARD_USERS_ONLINE', getUniqueOnlineUsers(boardId))
+    }
+  }
+
+  // Báo cho chính user bị xóa (họ join phòng cá nhân userId khi đăng nhập)
+  ioInstance.to(userId.toString()).emit('BE_BOARD_MEMBER_REMOVED', { boardId })
+}
+
 const getUniqueOnlineUsers = (boardId) => {
   if (!activeBoardUsers.has(boardId)) return []
   const userMap = activeBoardUsers.get(boardId)
