@@ -3,9 +3,13 @@ import { boardModel } from '~/models/boardModel'
 import { cardModel } from '~/models/cardModel'
 import ApiError from '~/utils/ApiError'
 import { StatusCodes } from 'http-status-codes'
+import { authorizationService } from '~/services/authorizationService'
 
-const createNew = async (reqBody) => {
+const createNew = async (userId, reqBody) => {
   try {
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board mới được tạo column (fix IDOR)
+    await authorizationService.requireBoardAccess(userId, reqBody.boardId)
+
     const newColumn = {
       ...reqBody
     }
@@ -24,8 +28,11 @@ const createNew = async (reqBody) => {
   } catch (error) { throw error }
 }
 
-const update = async (columnId, reqBody) => {
+const update = async (userId, columnId, reqBody) => {
   try {
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa column mới được cập nhật (fix IDOR)
+    await authorizationService.requireBoardAccessByColumnId(userId, columnId)
+
     const updateDate = {
       ...reqBody,
       updatedAt: Date.now()
@@ -36,9 +43,10 @@ const update = async (columnId, reqBody) => {
   } catch (error) { throw error }
 }
 
-const deleteItem = async (columnId) => {
+const deleteItem = async (userId, columnId) => {
   try {
-    const targetColumn = await columnModel.findOneById(columnId)
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa column mới được xóa (fix IDOR)
+    const { column: targetColumn } = await authorizationService.requireBoardAccessByColumnId(userId, columnId)
     if (!targetColumn) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Column not found!')
     }
@@ -56,9 +64,10 @@ const deleteItem = async (columnId) => {
   } catch (error) { throw error }
 }
 
-const archiveColumn = async (columnId) => {
+const archiveColumn = async (userId, columnId) => {
   try {
-    const targetColumn = await columnModel.findOneById(columnId)
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa column mới được lưu trữ (fix IDOR)
+    const { column: targetColumn } = await authorizationService.requireBoardAccessByColumnId(userId, columnId)
     if (!targetColumn) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Column not found!')
     }
@@ -75,9 +84,10 @@ const archiveColumn = async (columnId) => {
   } catch (error) { throw error }
 }
 
-const restoreColumn = async (columnId) => {
+const restoreColumn = async (userId, columnId) => {
   try {
-    const targetColumn = await columnModel.findOneById(columnId)
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa column mới được khôi phục (fix IDOR)
+    const { column: targetColumn } = await authorizationService.requireBoardAccessByColumnId(userId, columnId)
     if (!targetColumn) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Column not found!')
     }
