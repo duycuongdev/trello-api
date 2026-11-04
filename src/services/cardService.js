@@ -6,9 +6,17 @@ import { cloudinaryProvider } from '~/providers/CloundinaryProvider'
 import ApiError from '~/utils/ApiError'
 import { GET_DB } from '~/config/mongodb'
 import { ObjectId } from 'mongodb'
+import { authorizationService } from '~/services/authorizationService'
 
-const createNew = async (reqBody) => {
+const createNew = async (userId, reqBody) => {
   try {
+    // Kiểm tra quyền: column nhận card mới phải thuộc board mà user là Owner/Member (fix IDOR)
+    const { column } = await authorizationService.requireBoardAccessByColumnId(userId, reqBody.columnId)
+    // Đảm bảo boardId gửi lên khớp board thực sự của column (tránh tạo card lệch dữ liệu)
+    if (reqBody.boardId !== column.boardId.toString()) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid board information!')
+    }
+
     const newCard = {
       ...reqBody
     }
@@ -25,6 +33,10 @@ const createNew = async (reqBody) => {
 
 const update = async (cardId, reqBody, cardCoverFile, userInfo) => {
   try {
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được cập nhật (fix IDOR)
+    // Phải kiểm tra trước khi upload ảnh lên Cloudinary
+    await authorizationService.requireBoardAccessByCardId(userInfo?._id, cardId)
+
     const updateData = {
       ...reqBody,
       updatedAt: Date.now()
@@ -109,9 +121,14 @@ const deleteComment = async (cardId, commentId, userId) => {
   } catch (error) { throw error }
 }
 
-const addAttachment = async (cardId, file, isChecklistOnly = false) => {
+const addAttachment = async (userId, cardId, file, isChecklistOnly = false) => {
   try {
     if (!file) throw new ApiError(StatusCodes.BAD_REQUEST, 'Please select a file to upload!')
+
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được upload attachment (fix IDOR)
+    // Phải kiểm tra trước khi upload file lên Cloudinary
+    await authorizationService.requireBoardAccessByCardId(userId, cardId)
+
     const uploadResult = await cloudinaryProvider.streamUpload(file.buffer, 'cardAttachments')
     const attachmentData = {
       _id: Date.now().toString(),
@@ -129,8 +146,11 @@ const addAttachment = async (cardId, file, isChecklistOnly = false) => {
   } catch (error) { throw error }
 }
 
-const deleteAttachment = async (cardId, attachmentId) => {
+const deleteAttachment = async (userId, cardId, attachmentId) => {
   try {
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được xóa attachment (fix IDOR)
+    await authorizationService.requireBoardAccessByCardId(userId, cardId)
+
     const updatedCard = await cardModel.deleteAttachment(cardId, attachmentId)
     return updatedCard
   } catch (error) { throw error }
@@ -138,21 +158,8 @@ const deleteAttachment = async (cardId, attachmentId) => {
 
 const deleteItem = async (cardId, userId) => {
   try {
-    const targetCard = await cardModel.findOneById(cardId)
-    if (!targetCard) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Card not found!')
-    }
-
-    // Verify user authorization: user must be board owner or board member
-    const board = await boardModel.findOneById(targetCard.boardId)
-    if (!board) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Board not found!')
-    }
-    const isOwner = board.ownerIds?.some(id => id.toString() === userId.toString())
-    const isMember = board.memberIds?.some(id => id.toString() === userId.toString())
-    if (!isOwner && !isMember) {
-      throw new ApiError(StatusCodes.FORBIDDEN, 'You do not have permission to delete this card!')
-    }
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được xóa card
+    const { card: targetCard } = await authorizationService.requireBoardAccessByCardId(userId, cardId)
 
     // Xóa card
     await cardModel.deleteOneById(cardId)
@@ -164,17 +171,20 @@ const deleteItem = async (cardId, userId) => {
   } catch (error) { throw error }
 }
 
-const copyCard = async (cardId, reqBody) => {
+const copyCard = async (userId, cardId, reqBody) => {
   try {
-    const sourceCard = await cardModel.findOneById(cardId)
-    if (!sourceCard) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Card to copy not found!')
-    }
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được sao chép (fix IDOR)
+    const { card: sourceCard } = await authorizationService.requireBoardAccessByCardId(userId, cardId)
 
     const { title, columnId, position, keepOptions = {} } = reqBody
     const targetColumn = await columnModel.findOneById(columnId)
     if (!targetColumn) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Target column not found!')
+    }
+
+    // Đảm bảo column đích thuộc cùng board với card nguồn (tránh copy card lệch board)
+    if (targetColumn.boardId.toString() !== sourceCard.boardId.toString()) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Target column does not belong to this board!')
     }
 
     // Format checklists with new unique IDs if copied
@@ -241,12 +251,10 @@ const copyCard = async (cardId, reqBody) => {
   } catch (error) { throw error }
 }
 
-const archiveCard = async (cardId) => {
+const archiveCard = async (userId, cardId) => {
   try {
-    const card = await cardModel.findOneById(cardId)
-    if (!card) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Card not found!')
-    }
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được lưu trữ (fix IDOR)
+    const { card } = await authorizationService.requireBoardAccessByCardId(userId, cardId)
 
     const updatedCard = await cardModel.update(cardId, {
       _destroy: true,
@@ -260,12 +268,10 @@ const archiveCard = async (cardId) => {
   } catch (error) { throw error }
 }
 
-const restoreCard = async (cardId) => {
+const restoreCard = async (userId, cardId) => {
   try {
-    const card = await cardModel.findOneById(cardId)
-    if (!card) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Card not found!')
-    }
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được khôi phục (fix IDOR)
+    const { card } = await authorizationService.requireBoardAccessByCardId(userId, cardId)
 
     // Check if original column exists and is active
     let targetColumn = await columnModel.findOneById(card.columnId)

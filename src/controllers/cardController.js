@@ -3,7 +3,8 @@ import { cardService } from '~/services/cardService'
 
 const createNew = async (req, res, next) => {
   try {
-    const createCard = await cardService.createNew(req.body)
+    const userId = req.jwtDecoded._id
+    const createCard = await cardService.createNew(userId, req.body)
     res.status(StatusCodes.CREATED).json(createCard)
   } catch (error) { next(error) }
 }
@@ -42,18 +43,20 @@ const deleteComment = async (req, res, next) => {
 
 const addAttachment = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const cardId = req.params.id
     const file = req.file
     const isChecklistOnly = req.query.isChecklistOnly === 'true'
-    const updatedCard = await cardService.addAttachment(cardId, file, isChecklistOnly)
+    const updatedCard = await cardService.addAttachment(userId, cardId, file, isChecklistOnly)
     res.status(StatusCodes.OK).json(updatedCard)
   } catch (error) { next(error) }
 }
 
 const deleteAttachment = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const { id: cardId, attachmentId } = req.params
-    const updatedCard = await cardService.deleteAttachment(cardId, attachmentId)
+    const updatedCard = await cardService.deleteAttachment(userId, cardId, attachmentId)
     res.status(StatusCodes.OK).json(updatedCard)
   } catch (error) { next(error) }
 }
@@ -69,24 +72,27 @@ const deleteItem = async (req, res, next) => {
 
 const copyCard = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const cardId = req.params.id
-    const result = await cardService.copyCard(cardId, req.body)
+    const result = await cardService.copyCard(userId, cardId, req.body)
     res.status(StatusCodes.CREATED).json(result)
   } catch (error) { next(error) }
 }
 
 const archiveCard = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const cardId = req.params.id
-    const result = await cardService.archiveCard(cardId)
+    const result = await cardService.archiveCard(userId, cardId)
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
 }
 
 const restoreCard = async (req, res, next) => {
   try {
+    const userId = req.jwtDecoded._id
     const cardId = req.params.id
-    const result = await cardService.restoreCard(cardId)
+    const result = await cardService.restoreCard(userId, cardId)
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
 }

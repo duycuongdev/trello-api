@@ -10,6 +10,7 @@ import { invitationModel } from '~/models/invitationModel'
 import { GET_DB } from '~/config/mongodb'
 import { ObjectId } from 'mongodb'
 import { DEFAULT_PAGE, DEFAULT_ITEMS_PER_PAGE } from '~/utils/constants'
+import { authorizationService } from '~/services/authorizationService'
 
 const createNew = async (userId, reqBody) => {
   try {
@@ -62,8 +63,11 @@ const getDetails = async (userId, boardId) => {
   } catch (error) { throw error }
 }
 
-const update = async (boardId, reqBody, boardBackgroundFile) => {
+const update = async (userId, boardId, reqBody, boardBackgroundFile) => {
   try {
+    // Kiểm tra quyền: chỉ Owner hoặc Member của board mới được cập nhật (fix IDOR)
+    await authorizationService.requireBoardAccess(userId, boardId)
+
     const updateData = {
       ...reqBody,
       updatedAt: Date.now()
@@ -85,8 +89,20 @@ const update = async (boardId, reqBody, boardBackgroundFile) => {
   } catch (error) { throw error }
 }
 
-const moveCardToDifferentColumn = async (reqBody) => {
+const moveCardToDifferentColumn = async (userId, reqBody) => {
   try {
+    // Kiểm tra quyền: user phải là Owner/Member của board chứa card đang di chuyển (fix IDOR)
+    const { card } = await authorizationService.requireBoardAccessByCardId(userId, reqBody.currentCardId)
+
+    // Đảm bảo 2 column gửi lên đều thuộc board của card (tránh thao tác lệch board làm hỏng dữ liệu)
+    const prevColumn = await columnModel.findOneById(reqBody.prevColumnId)
+    const nextColumn = await columnModel.findOneById(reqBody.nextColumnId)
+    if (!prevColumn || !nextColumn ||
+      prevColumn.boardId.toString() !== card.boardId.toString() ||
+      nextColumn.boardId.toString() !== card.boardId.toString()) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid column information!')
+    }
+
     await columnModel.update(reqBody.prevColumnId, {
       cardOrderIds: reqBody.prevCardOrderIds,
       updatedAt: Date.now()
