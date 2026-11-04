@@ -9,6 +9,9 @@ on:
 jobs:
   lint-build-test:
     runs-on: ubuntu-latest
+    # Dùng Environment "MONGODB_URI" (đã tạo trong repo settings) để có secrets
+    # MONGODB_URI + DATABASE_NAME cho integration tests
+    environment: MONGODB_URI
     steps:
       - uses: actions/checkout@v4
 
