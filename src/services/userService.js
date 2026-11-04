@@ -60,7 +60,7 @@ const createNew = async (reqBody) => {
       // Trường hợp tài khoản đã tạo trước đó nhưng chưa verify (ví dụ do lỗi gửi email)
       // Cho phép cập nhật mật khẩu mới và sinh verifyToken mới để gửi lại email xác thực
       const newVerifyToken = uuidv4()
-      const newPasswordHash = bcrypt.hashSync(reqBody.password, 8)
+      const newPasswordHash = await bcrypt.hash(reqBody.password, 10)
       userToProcess = await userModel.update(existUser._id, {
         password: newPasswordHash,
         verifyToken: newVerifyToken
@@ -71,7 +71,7 @@ const createNew = async (reqBody) => {
       const newUser = {
         email: reqBody.email,
         // 8: số vòng lặp băm, càng nhiều vòng lặp thì càng an toàn nhưng sẽ tốn thời gian hơn
-        password: bcrypt.hashSync(reqBody.password, 8),
+        password: await bcrypt.hash(reqBody.password, 10),
         username: nameFromEmail,
         displayName: nameFromEmail,
         verifyToken: uuidv4()
@@ -216,9 +216,10 @@ const login = async (reqBody) => {
     const existUser = await userModel.findOneByEmail(reqBody.email)
 
     // Các bước kiểm tra cần thiết
-    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Account not found!')
+    // Anti-enumeration: email khong ton tai va sai mat khau tra cung status + message
+    if (!existUser) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Your email or password is incorrect!')
     if (!existUser.isActive) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Your account is not active')
-    if (!bcrypt.compareSync(reqBody.password, existUser.password)) {
+    if (!(await bcrypt.compare(reqBody.password, existUser.password))) {
       throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Your email or password is incorrect!')
     }
 
@@ -275,11 +276,11 @@ const update = async (userId, reqBody, userAvatarFile) => {
     // Trường hợp change password
     if (reqBody.current_password && reqBody.new_password) {
       // Kiểm tra current_password có đúng không
-      if (!bcrypt.compareSync(reqBody.current_password, existUser.password)) {
+      if (!(await bcrypt.compare(reqBody.current_password, existUser.password))) {
         throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Your current password is incorrect!')
       }
       // Nếu đúng thì tiến hành update password mới
-      updatedUser = await userModel.update(existUser._id, { password: bcrypt.hashSync(reqBody.new_password, 8) })
+      updatedUser = await userModel.update(existUser._id, { password: await bcrypt.hash(reqBody.new_password, 10) })
       // Đổi mật khẩu => thu hồi toàn bộ refresh token đang có, ép mọi phiên đăng nhập khác phải đăng nhập lại
       await refreshTokenModel.revokeAllByUserId(existUser._id)
     } else if (userAvatarFile) {
@@ -341,7 +342,7 @@ const googleLogin = async (reqBody) => {
       const username = email.split('@')[0]
       const newUser = {
         email,
-        password: bcrypt.hashSync(uuidv4(), 8), // Mật khẩu ngẫu nhiên an toàn cho tài khoản OAuth
+        password: await bcrypt.hash(uuidv4(), 10), // Mật khẩu ngẫu nhiên an toàn cho tài khoản OAuth
         username,
         displayName: name || username,
         avatar: picture || null,
@@ -483,7 +484,7 @@ const resetPassword = async (reqBody) => {
     }
 
     const updatedUser = await userModel.update(existUser._id, {
-      password: bcrypt.hashSync(reqBody.newPassword, 8),
+      password: await bcrypt.hash(reqBody.newPassword, 10),
       resetPasswordToken: null,
       resetPasswordExpire: null
     })
