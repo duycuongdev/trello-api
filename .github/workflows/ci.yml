@@ -45,4 +45,14 @@ jobs:
           BUILD_MODE: dev
           WEBSITE_DOMAIN_DEVELOPMENT: http://localhost:5173
           WEBSITE_DOMAIN_PRODUCTION: http://localhost:5173
-        run: npm test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test-output.log
+
+      - name: Upload test output (for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: test-output.log
+          retention-days: 7
