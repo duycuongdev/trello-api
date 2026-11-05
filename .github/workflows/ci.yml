@@ -57,10 +57,14 @@ jobs:
           path: test-output.log
           retention-days: 7
 
-      # Đẩy các dòng lỗi ra ANNOTATIONS - đọc được qua check-runs API (công khai)
-      - name: Surface failures as annotations
+      # Chẩn đoán vô điều kiện: kiểm tra file log + bắn các dòng cuối ra ANNOTATIONS
+      - name: Surface diagnostics as annotations
         if: always()
         run: |
-          tail -25 test-output.log | grep -iE "error|FAILED|not ok|EADDR|timeout|cannot|refused" | head -10 | while IFS= read -r line; do
-            echo "::error::$line"
+          echo "::error::DIAG pwd=$(pwd)"
+          ls -la test-output.log || echo "::error::DIAG NO LOG FILE"
+          wc -l test-output.log || echo "::error::DIAG WC FAILED"
+          tail -12 test-output.log > diag-lines.txt 2>&1 || true
+          head -10 diag-lines.txt | while IFS= read -r line; do
+            echo "::error::DIAG $line"
           done
