@@ -57,11 +57,10 @@ jobs:
           path: test-output.log
           retention-days: 7
 
-      # Bẳng các dòng lỗi quan trọng ra Job Summary - đọc được qua check-runs API
-      - name: Extract failures to summary
+      # Đẩy các dòng lỗi ra ANNOTATIONS - đọc được qua check-runs API (công khai)
+      - name: Surface failures as annotations
         if: always()
         run: |
-          {
-            echo "### TEST FAILURES (grep)"
-            grep -E "FAILED|not ok [0-9]+ -|# (pass|fail|tests)" test-output.log | head -50 || echo "(no matches)"
-          } >> "$GITHUB_STEP_SUMMARY"
+          grep -E "FAILED|not ok [0-9]+ - |# fail" test-output.log | head -10 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
