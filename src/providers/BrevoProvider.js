@@ -18,6 +18,13 @@ if (env.BREVO_API_KEY) {
 }
 
 const sendEmail = async (recipientEmail, customSubject, htmlContent) => {
+  // EMAIL_MODE=mock: bỏ qua việc gửi email thật (dùng trong CI/tests để test
+  // các flow chứa email mà không phụ thuộc nhà cung cấp)
+  if (String(env.EMAIL_MODE) === 'mock') {
+    logger.info(`[EMAIL MOCK] To: ${recipientEmail} | Subject: ${customSubject}`)
+    return { mocked: true }
+  }
+
   const trimmedKey = env.BREVO_API_KEY ? env.BREVO_API_KEY.trim() : ''
 
   // Cảnh báo trực tiếp nếu dev/user nhầm giữa SMTP Key (xsmtpsib-) và REST API Key (xkeysib-)
