@@ -61,6 +61,6 @@ jobs:
       - name: Surface failures as annotations
         if: always()
         run: |
-          grep -E "FAILED|not ok [0-9]+ - |# fail" test-output.log | head -10 | while IFS= read -r line; do
+          tail -25 test-output.log | grep -iE "error|FAILED|not ok|EADDR|timeout|cannot|refused" | head -10 | while IFS= read -r line; do
             echo "::error::$line"
           done
