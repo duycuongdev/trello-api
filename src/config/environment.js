@@ -18,6 +18,8 @@ export const env = {
   BREVO_API_KEY: process.env.BREVO_API_KEY,
   ADMIN_EMAIL_ADDRESS: process.env.ADMIN_EMAIL_ADDRESS,
   ADMIN_EMAIL_NAME: process.env.ADMIN_EMAIL_NAME,
+  // 'mock' = không gửi email thật (dùng cho CI/tests)
+  EMAIL_MODE: process.env.EMAIL_MODE,
 
   ACCESS_TOKEN_SECRET_SIGNATURE: process.env.ACCESS_TOKEN_SECRET_SIGNATURE,
   ACCESS_TOKEN_LIFE: process.env.ACCESS_TOKEN_LIFE,
