@@ -56,3 +56,12 @@ jobs:
           name: test-output
           path: test-output.log
           retention-days: 7
+
+      # Bẳng các dòng lỗi quan trọng ra Job Summary - đọc được qua check-runs API
+      - name: Extract failures to summary
+        if: always()
+        run: |
+          {
+            echo "### TEST FAILURES (grep)"
+            grep -E "FAILED|not ok [0-9]+ -|# (pass|fail|tests)" test-output.log | head -50 || echo "(no matches)"
+          } >> "$GITHUB_STEP_SUMMARY"
