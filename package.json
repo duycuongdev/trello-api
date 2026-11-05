@@ -15,7 +15,7 @@
     "start": "cross-env BUILD_MODE=production node ./build/src/server.js",
     "production": "npm run build && cross-env BUILD_MODE=production node ./build/src/server.js",
     "dev": "cross-env BUILD_MODE=dev nodemon --exec babel-node ./src/server.js",
-    "test": "node --test tests/",
+    "test": "node --test --test-concurrency=1 tests/",
     "test:e2e": "node --test --test-concurrency=1 tests/integration/"
   },
   "dependencies": {
