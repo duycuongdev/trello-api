@@ -64,7 +64,6 @@ jobs:
           echo "::error::DIAG pwd=$(pwd)"
           ls -la test-output.log || echo "::error::DIAG NO LOG FILE"
           wc -l test-output.log || echo "::error::DIAG WC FAILED"
-          tail -12 test-output.log > diag-lines.txt 2>&1 || true
-          head -10 diag-lines.txt | while IFS= read -r line; do
+          grep -nE "FAILED|not ok [0-9]+ - " test-output.log | head -10 | while IFS= read -r line; do
             echo "::error::DIAG $line"
           done
