@@ -33,11 +33,19 @@ const update = async (req, res, next) => {
       Joi.object({
         _id: Joi.string().optional(),
         title: Joi.string().required().trim(),
+        dueDate: Joi.date().timestamp('javascript').allow(null).optional(),
+        memberIds: Joi.array().items(
+          Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)
+        ).optional(),
         items: Joi.array().items(
           Joi.object({
             _id: Joi.string().optional(),
             title: Joi.string().required().trim(),
             isDone: Joi.boolean().default(false),
+            dueDate: Joi.date().timestamp('javascript').allow(null).optional(),
+            memberIds: Joi.array().items(
+              Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)
+            ).optional(),
             link: Joi.string().allow(null, '').optional(),
             fileName: Joi.string().allow(null, '').optional(),
             attachments: Joi.array().items(

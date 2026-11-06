@@ -22,11 +22,21 @@ const CARD_COLLECTION_SCHEMA = Joi.object({
     Joi.object({
       _id: Joi.string().optional(),
       title: Joi.string().required().trim(),
+      // Hạn chót + thành viên ở CẤP CHECKLIST (micro-task list)
+      dueDate: Joi.date().timestamp('javascript').allow(null).default(null),
+      memberIds: Joi.array().items(
+        Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)
+      ).default([]),
       items: Joi.array().items(
         Joi.object({
           _id: Joi.string().optional(),
           title: Joi.string().required().trim(),
           isDone: Joi.boolean().default(false),
+          // Hạn chót + thành viên ở CẤP ITEM
+          dueDate: Joi.date().timestamp('javascript').allow(null).default(null),
+          memberIds: Joi.array().items(
+            Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)
+          ).default([]),
           link: Joi.string().allow(null, '').optional(),
           fileName: Joi.string().allow(null, '').optional(),
           attachments: Joi.array().items(
