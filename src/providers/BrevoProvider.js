@@ -1,21 +1,12 @@
-// Lưu ý Brevo là tên thương hiệu mới của sib – Sendinblue
-// Vì thế trong phần hướng dẫn trên github có thể nó vẫn còn giữ tên biến SibApiV3Sdk
-// https://github.com/getbrevo/brevo-node
-const SibApiV3Sdk = require('@getbrevo/brevo')
+// Brevo (tên mới của Sendinblue) - gọi thẳng REST API v3 bằng fetch của Node (>=18).
+// Không dùng SDK @getbrevo/brevo vì bản cũ kéo theo package `request` đã ngừng bảo trì
+// (nhiều lỗ hổng critical: form-data, qs, tough-cookie).
+// Docs: https://developers.brevo.com/reference/sendtransacemail
 import { env } from '~/config/environment'
 import { logger } from '~/utils/logger'
 
-/**
- * Có thể xem thêm phần docs cấu hình theo từng ngôn ngữ khác nhau tùy dự án ở Brevo Dashboard > Account > SMTP & API > API Keys
- * https://brevo.com
- * Với Nodejs thì tốt nhất cứ lên github repo của bọn nó là nhanh nhất:
- * https://github.com/getbrevo/brevo-node
- */
-let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi()
-let apiKey = apiInstance.authentications['apiKey']
-if (env.BREVO_API_KEY) {
-  apiKey.apiKey = env.BREVO_API_KEY.trim()
-}
+const BREVO_SEND_EMAIL_URL = 'https://api.brevo.com/v3/smtp/email'
+const REQUEST_TIMEOUT_MS = 10000
 
 const sendEmail = async (recipientEmail, customSubject, htmlContent) => {
   // EMAIL_MODE=mock: bỏ qua việc gửi email thật (dùng trong CI/tests để test
@@ -25,45 +16,47 @@ const sendEmail = async (recipientEmail, customSubject, htmlContent) => {
     return { mocked: true }
   }
 
-  const trimmedKey = env.BREVO_API_KEY ? env.BREVO_API_KEY.trim() : ''
+  const apiKey = env.BREVO_API_KEY ? env.BREVO_API_KEY.trim() : ''
+
+  if (!apiKey) {
+    throw new Error('Missing BREVO_API_KEY: cấu hình API Key v3 (bắt đầu bằng "xkeysib-") trong .env để gửi email.')
+  }
 
   // Cảnh báo trực tiếp nếu dev/user nhầm giữa SMTP Key (xsmtpsib-) và REST API Key (xkeysib-)
-  if (trimmedKey.startsWith('xsmtpsib-')) {
-    const errorMsg = 'Invalid Brevo Key Type: Bạn đang cấu hình khóa SMTP (bắt đầu bằng "xsmtpsib-"). Thư viện Brevo REST API yêu cầu API Key v3 (bắt đầu bằng "xkeysib-"). Hãy vào Brevo Dashboard > SMTP & API > Tab "API Keys" để tạo khóa "xkeysib-".'
+  if (apiKey.startsWith('xsmtpsib-')) {
+    const errorMsg = 'Invalid Brevo Key Type: Bạn đang cấu hình khóa SMTP (bắt đầu bằng "xsmtpsib-"). Brevo REST API yêu cầu API Key v3 (bắt đầu bằng "xkeysib-"). Hãy vào Brevo Dashboard > SMTP & API > Tab "API Keys" để tạo khóa "xkeysib-".'
     logger.error('❌ ' + errorMsg)
     throw new Error(errorMsg)
   }
 
-  // Đảm bảo apiKey luôn lấy giá trị mới nhất được trim khoảng trắng
-  if (trimmedKey) {
-    apiKey.apiKey = trimmedKey
+  const response = await fetch(BREVO_SEND_EMAIL_URL, {
+    method: 'POST',
+    headers: {
+      'api-key': apiKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({
+      sender: {
+        email: env.ADMIN_EMAIL_ADDRESS ? env.ADMIN_EMAIL_ADDRESS.trim() : 'admin@trello.com',
+        name: env.ADMIN_EMAIL_NAME ? env.ADMIN_EMAIL_NAME.trim() : 'Trello Admin'
+      },
+      // to là array để có thể gửi cho nhiều người cùng lúc
+      to: [{ email: recipientEmail }],
+      subject: customSubject,
+      htmlContent
+    }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  })
+
+  const body = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(`Brevo API error ${response.status}: ${body.message || body.code || response.statusText}`)
   }
 
-  // khởi tạo 1 cái sendSmtpEmail
-  let sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail()
-
-  // tài khoản gửi email
-  sendSmtpEmail.sender = {
-    email: env.ADMIN_EMAIL_ADDRESS ? env.ADMIN_EMAIL_ADDRESS.trim() : 'admin@trello.com',
-    name: env.ADMIN_EMAIL_NAME ? env.ADMIN_EMAIL_NAME.trim() : 'Trello Admin'
-  }
-
-  // người nhận email
-  // to phải là 1 array để có thể gửi cho nhiều người cùng lúc
-  sendSmtpEmail.to = [
-    {
-      email: recipientEmail
-    }
-  ]
-
-  // chủ đề email
-  sendSmtpEmail.subject = customSubject
-
-  // nội dung email
-  sendSmtpEmail.htmlContent = htmlContent
-
-  // gửi email
-  return apiInstance.sendTransacEmail(sendSmtpEmail)
+  // { messageId: '<...@smtp-relay.mailin.fr>' }
+  return body
 }
 
 export const brevoProvider = {

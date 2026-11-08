@@ -6,7 +6,7 @@ import { cloudinaryProvider } from '~/providers/CloudinaryProvider'
 import ApiError from '~/utils/ApiError'
 import { GET_DB } from '~/config/mongodb'
 import { ObjectId } from 'mongodb'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 import { authorizationService } from '~/services/authorizationService'
 import { withTransaction } from '~/utils/withTransaction'
 
@@ -60,7 +60,7 @@ const update = async (cardId, reqBody, cardCoverFile, userInfo) => {
       const commentData = {
         ...updateData.commentToAdd,
         // UUID thay cho Date.now(): tránh trùng _id khi 2 comment cùng mili-giây
-        _id: uuidv4(),
+        _id: randomUUID(),
         userId: userInfo._id,
         userEmail: userInfo.email,
         commentedAt: Date.now()
@@ -140,7 +140,7 @@ const addAttachment = async (userId, cardId, file, isChecklistOnly = false) => {
     const uploadResult = await cloudinaryProvider.streamUpload(file.buffer, 'cardAttachments')
     const attachmentData = {
       // UUID thay cho Date.now(): tránh trùng _id khi 2 attachment cùng mili-giây
-      _id: uuidv4(),
+      _id: randomUUID(),
       fileName: file.originalname,
       fileUrl: uploadResult.secure_url,
       fileType: file.mimetype,
@@ -202,16 +202,16 @@ const copyCard = async (userId, cardId, reqBody) => {
     // Format checklists with new unique UUIDs if copied
     const checklistsToCopy = (keepOptions.checklists !== false && Array.isArray(sourceCard.checklists))
       ? sourceCard.checklists.map(cl => ({
-        _id: uuidv4(),
+        _id: randomUUID(),
         title: cl.title,
         items: (cl.items || []).map(item => ({
-          _id: uuidv4(),
+          _id: randomUUID(),
           title: item.title,
           isDone: Boolean(item.isDone),
           link: item.link || null,
           fileName: item.fileName || null,
           attachments: (item.attachments || []).map(att => ({
-            _id: uuidv4(),
+            _id: randomUUID(),
             url: att.url,
             fileName: att.fileName || null,
             isFile: Boolean(att.isFile)
