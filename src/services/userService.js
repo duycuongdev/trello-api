@@ -3,7 +3,7 @@ import { logger } from '~/utils/logger'
 import ApiError from '~/utils/ApiError'
 import { userModel } from '~/models/userModel'
 import bcrypt from 'bcryptjs'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 import { pickUser } from '~/utils/formatter'
 import { WEBSITE_DOMAINS } from '~/utils/constants'
 import { brevoProvider } from '~/providers/BrevoProvider'
@@ -28,12 +28,12 @@ const issueTokenPair = async (user) => {
   // trong cùng 1 giây cho cùng user sẽ GIỐNG HỆT nhau (trùng iat + payload)
   // => vi phạm unique index refresh_tokens và token bị tái sử dụng vô tình.
   const accessToken = jwtProvider.generateToken(
-    { ...userInfo, jti: uuidv4() },
+    { ...userInfo, jti: randomUUID() },
     env.ACCESS_TOKEN_SECRET_SIGNATURE,
     env.ACCESS_TOKEN_LIFE
   )
   const refreshToken = jwtProvider.generateToken(
-    { ...userInfo, jti: uuidv4() },
+    { ...userInfo, jti: randomUUID() },
     env.REFRESH_TOKEN_SECRET_SIGNATURE,
     env.REFRESH_TOKEN_LIFE
   )
@@ -59,7 +59,7 @@ const createNew = async (reqBody) => {
       }
       // Trường hợp tài khoản đã tạo trước đó nhưng chưa verify (ví dụ do lỗi gửi email)
       // Cho phép cập nhật mật khẩu mới và sinh verifyToken mới để gửi lại email xác thực
-      const newVerifyToken = uuidv4()
+      const newVerifyToken = randomUUID()
       const newPasswordHash = await bcrypt.hash(reqBody.password, 10)
       userToProcess = await userModel.update(existUser._id, {
         password: newPasswordHash,
@@ -74,7 +74,7 @@ const createNew = async (reqBody) => {
         password: await bcrypt.hash(reqBody.password, 10),
         username: nameFromEmail,
         displayName: nameFromEmail,
-        verifyToken: uuidv4()
+        verifyToken: randomUUID()
       }
 
       // lưu vào DB
@@ -340,7 +340,7 @@ const googleLogin = async (reqBody) => {
       const username = email.split('@')[0]
       const newUser = {
         email,
-        password: await bcrypt.hash(uuidv4(), 10), // Mật khẩu ngẫu nhiên an toàn cho tài khoản OAuth
+        password: await bcrypt.hash(randomUUID(), 10), // Mật khẩu ngẫu nhiên an toàn cho tài khoản OAuth
         username,
         displayName: name || username,
         avatar: picture || null,
@@ -386,7 +386,7 @@ const forgotPassword = async (reqBody) => {
     }
 
     // Sinh token reset (uuid) và lưu kèm hạn dùng 15 phút
-    const resetToken = uuidv4()
+    const resetToken = randomUUID()
     await userModel.update(existUser._id, {
       resetPasswordToken: resetToken,
       resetPasswordExpire: Date.now() + ms('15m')
