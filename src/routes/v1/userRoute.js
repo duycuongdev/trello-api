@@ -16,6 +16,10 @@ Router.route('/verify')
 Router.route('/login')
   .post(rateLimiterMiddleware.loginLimiter, userValidation.login, userController.login)
 
+// Đăng nhập nhanh cho khách trải nghiệm demo (không cần đăng ký / email xác thực)
+Router.route('/guest_login')
+  .post(rateLimiterMiddleware.loginLimiter, userController.guestLogin)
+
 Router.route('/google-login')
   .post(rateLimiterMiddleware.loginLimiter, userValidation.googleLogin, userController.googleLogin)
 

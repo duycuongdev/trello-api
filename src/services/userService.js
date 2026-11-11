@@ -230,6 +230,47 @@ const login = async (reqBody) => {
   } catch (error) { throw error }
 }
 
+/**
+ * Đăng nhập nhanh dành cho khách (Demo/Guest):
+ * - Dùng cho nút "Try as Guest" để nhà tuyển dụng trải nghiệm ngay không cần đăng ký.
+ * - Tài khoản guest được hệ thống tự tạo đúng 1 lần (isActive = true, không gửi email xác thực)
+ *   và mọi phiên login đều dùng chung account này (mỗi phiên có cặp token riêng nên không xung đột rotation).
+ * - Chống lạm dụng: route gắn loginLimiter theo IP.
+ */
+const GUEST_EMAIL = 'guest@duycuong.dev'
+
+const guestLogin = async () => {
+  try {
+    let existUser = await userModel.findOneByEmail(GUEST_EMAIL)
+
+    if (!existUser) {
+      // Tạo mới tài khoản guest (mật khẩu ngẫu nhiên - guest không bao giờ đăng nhập bằng password)
+      try {
+        const newUser = {
+          email: GUEST_EMAIL,
+          password: await bcrypt.hash(randomUUID(), 10),
+          username: GUEST_EMAIL.split('@')[0],
+          displayName: 'Guest',
+          role: 'client',
+          isActive: true
+        }
+        const createdUser = await userModel.createNew(newUser)
+        existUser = await userModel.findOneById(createdUser.insertedId)
+      } catch (insertError) {
+        // Race condition: 2 request guest song song -> unique index chặn 1 request
+        existUser = await userModel.findOneByEmail(GUEST_EMAIL)
+        if (!existUser) throw insertError
+      }
+    } else if (!existUser.isActive) {
+      // Đảm bảo guest luôn ở trạng thái active (kể cả khi bị vô hiệu hóa ngoài ý muốn)
+      existUser = await userModel.update(existUser._id, { isActive: true })
+    }
+
+    const { accessToken, refreshToken } = await issueTokenPair(existUser)
+    return { ...pickUser(existUser), accessToken, refreshToken }
+  } catch (error) { throw error }
+}
+
 const refreshToken = async (clientRefreshToken) => {
   // Verify / giải mã cái refresh token xem có hợp lệ không (chữ ký + hạn dùng JWT)
   const refreshTokenDecoded = await jwtProvider.verifyToken(clientRefreshToken, env.REFRESH_TOKEN_SECRET_SIGNATURE)
@@ -496,6 +537,7 @@ export const userService = {
   createNew,
   verifyAccount,
   login,
+  guestLogin,
   googleLogin,
   refreshToken,
   update,

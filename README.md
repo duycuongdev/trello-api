@@ -15,6 +15,8 @@
 ## 🌐 Live Client & Application
 
 - 🖥️ **Web Application**: [https://trello-web-tawny.vercel.app](https://trello-web-tawny.vercel.app)
+- 🐢 Hosted on Render free tier — **the first request may take ~30s to wake up** (subsequent requests are fast).
+- ⚡ **`POST /v1/users/guest_login`** — one-click demo login powering the frontend **"Try as Guest"** button: creates/reuses the shared `guest@duycuong.dev` account (no email verification step), issues a standard JWT pair with HttpOnly cookies, rate-limited per IP.
 
 ---
 
@@ -126,6 +128,13 @@ Run tests (unit tests for utils & validation middlewares — requires `npm run b
 npm run build
 npm test
 ```
+
+Seed the demo workspace (guest account + realistic "Website Redesign — Launch Plan" board):
+```bash
+node scripts/seed-demo-board.mjs                 # local backend on :1900
+API_ROOT=https://trello-api-5hh5.onrender.com node scripts/seed-demo-board.mjs
+```
+Idempotent — running it again will not duplicate the seeded board (use `--force` to recreate).
 
 API documentation (Swagger UI — served when the server is running):
 ```

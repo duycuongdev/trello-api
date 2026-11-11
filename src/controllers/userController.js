@@ -40,6 +40,28 @@ const login = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
+const guestLogin = async (req, res, next) => {
+  try {
+    const result = await userService.guestLogin()
+
+    res.cookie('accessToken', result.accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: ms('14d')
+    })
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: ms('14d')
+    })
+
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
 const googleLogin = async (req, res, next) => {
   try {
     const result = await userService.googleLogin(req.body)
@@ -142,6 +164,7 @@ export const userController = {
   createNew,
   verifyAccount,
   login,
+  guestLogin,
   googleLogin,
   logout,
   refreshToken,
