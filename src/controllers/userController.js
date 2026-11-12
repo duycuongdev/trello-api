@@ -4,6 +4,26 @@ import ms from 'ms'
 import ApiError from '~/utils/ApiError'
 import { pickUser } from '~/utils/formatter'
 
+/**
+ * Gắn cặp token (access + refresh) vào HttpOnly cookies sau khi đăng nhập/refresh.
+ * Dùng chung cho login, guest_login, google-login và refresh_token để tránh lặp code.
+ */
+const setAuthCookies = (res, result) => {
+  res.cookie('accessToken', result.accessToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none',
+    maxAge: ms('14d')
+  })
+
+  res.cookie('refreshToken', result.refreshToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none',
+    maxAge: ms('14d')
+  })
+}
+
 const createNew = async (req, res, next) => {
   try {
     const createdUser = await userService.createNew(req.body)
@@ -22,19 +42,7 @@ const login = async (req, res, next) => {
   try {
     const result = await userService.login(req.body)
 
-    res.cookie('accessToken', result.accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: ms('14d')
-    })
-
-    res.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: ms('14d')
-    })
+    setAuthCookies(res, result)
 
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
@@ -44,19 +52,7 @@ const guestLogin = async (req, res, next) => {
   try {
     const result = await userService.guestLogin()
 
-    res.cookie('accessToken', result.accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: ms('14d')
-    })
-
-    res.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: ms('14d')
-    })
+    setAuthCookies(res, result)
 
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
@@ -66,19 +62,7 @@ const googleLogin = async (req, res, next) => {
   try {
     const result = await userService.googleLogin(req.body)
 
-    res.cookie('accessToken', result.accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: ms('14d')
-    })
-
-    res.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: ms('14d')
-    })
+    setAuthCookies(res, result)
 
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
@@ -112,19 +96,8 @@ const refreshToken = async (req, res, next) => {
     const bearer = req.headers?.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null
     const clientRefreshToken = req.cookies?.refreshToken || req.headers['x-refresh-token'] || bearer || req.body?.refreshToken
     const result = await userService.refreshToken(clientRefreshToken)
-    res.cookie('accessToken', result.accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: ms('14d')
-    })
     // ROTATION: set luôn cookie refreshToken mới (token cũ đã bị thu hồi ở service)
-    res.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: ms('14d')
-    })
+    setAuthCookies(res, result)
     res.status(StatusCodes.OK).json(result)
   } catch (error) {
     next(new ApiError(StatusCodes.UNAUTHORIZED, error?.message || 'Please Sign In!'))

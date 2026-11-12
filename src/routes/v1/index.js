@@ -50,13 +50,13 @@ Router.get('/health', async (req, res) => {
   }
 })
 
-// boads api
+// boards api
 Router.use('/boards', boardRouter )
 
-// boads api
+// columns api
 Router.use('/columns', columnRouter )
 
-// boads api
+// cards api
 Router.use('/cards', cardRouter )
 
 // user api
