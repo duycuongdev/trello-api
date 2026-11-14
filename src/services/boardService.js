@@ -68,7 +68,7 @@ const getDetails = async (userId, boardId) => {
 const update = async (userId, boardId, reqBody, boardBackgroundFile) => {
   try {
     // Kiểm tra quyền: chỉ Owner hoặc Member của board mới được cập nhật (fix IDOR)
-    await authorizationService.requireBoardAccess(userId, boardId)
+    const board = await authorizationService.requireBoardAccess(userId, boardId)
 
     const updateData = {
       ...reqBody,
@@ -81,6 +81,9 @@ const update = async (userId, boardId, reqBody, boardBackgroundFile) => {
 
     // Nếu người dùng upload file ảnh nền từ thiết bị, tải lên Cloudinary
     if (boardBackgroundFile) {
+      if (board?.background && String(board.background).startsWith('http') && board.background.includes('res.cloudinary.com')) {
+        cloudinaryProvider.deleteFile(board.background).catch(() => {})
+      }
       const uploadResult = await cloudinaryProvider.streamUpload(boardBackgroundFile.buffer, 'boardBackgrounds')
       updateData.background = uploadResult.secure_url
     }

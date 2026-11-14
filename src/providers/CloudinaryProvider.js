@@ -1,6 +1,7 @@
 import cloudinary from 'cloudinary'
 import streamifier from 'streamifier'
 import { env } from '~/config/environment'
+import { logger } from '~/utils/logger'
 
 // config cloudinary
 const cloudinaryV2 = cloudinary.v2
@@ -26,4 +27,47 @@ const streamUpload = (fileBuffer, folderName) => {
   })
 }
 
-export const cloudinaryProvider = { streamUpload }
+/**
+ * Trích xuất public_id từ URL Cloudinary
+ * Ví dụ: https://res.cloudinary.com/cloud_name/image/upload/v12345/cardAttachments/xyz.png -> cardAttachments/xyz
+ */
+const getPublicIdFromUrl = (url) => {
+  if (!url || typeof url !== 'string' || !url.includes('res.cloudinary.com')) return null
+  try {
+    const parts = url.split('/upload/')
+    if (parts.length < 2) return null
+    // Bỏ phần version (v12345678/) nếu có
+    const pathAfterUpload = parts[1].replace(/^v\d+\//, '')
+    // Bỏ extension cuối (.png, .jpg, v.v.)
+    const lastDotIndex = pathAfterUpload.lastIndexOf('.')
+    return lastDotIndex !== -1 ? pathAfterUpload.substring(0, lastDotIndex) : pathAfterUpload
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Xóa file trên Cloudinary để tránh rác dung lượng lưu trữ (Orphaned Assets)
+ */
+const deleteFile = async (fileUrlOrPublicId) => {
+  try {
+    if (!fileUrlOrPublicId) return null
+    const publicId = fileUrlOrPublicId.includes('http')
+      ? getPublicIdFromUrl(fileUrlOrPublicId)
+      : fileUrlOrPublicId
+
+    if (!publicId) return null
+
+    // Thử xóa với resource_type='image' trước, nếu không tìm thấy thì thử tiếp với 'raw'
+    let result = await cloudinaryV2.uploader.destroy(publicId, { resource_type: 'image' })
+    if (result?.result === 'not found') {
+      result = await cloudinaryV2.uploader.destroy(publicId, { resource_type: 'raw' })
+    }
+    return result
+  } catch (error) {
+    logger.error('[Cloudinary] Failed to delete file:', error?.message || error)
+    return null
+  }
+}
+
+export const cloudinaryProvider = { streamUpload, deleteFile, getPublicIdFromUrl }

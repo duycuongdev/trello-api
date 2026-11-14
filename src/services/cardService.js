@@ -42,7 +42,7 @@ const update = async (cardId, reqBody, cardCoverFile, userInfo) => {
   try {
     // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được cập nhật (fix IDOR)
     // Phải kiểm tra trước khi upload ảnh lên Cloudinary
-    await authorizationService.requireBoardAccessByCardId(userInfo?._id, cardId)
+    const { card: currentCard } = await authorizationService.requireBoardAccessByCardId(userInfo?._id, cardId)
 
     const updateData = {
       ...reqBody,
@@ -52,6 +52,10 @@ const update = async (cardId, reqBody, cardCoverFile, userInfo) => {
     let updatedCard = {}
 
     if (cardCoverFile) {
+      // Dọn dẹp cover cũ trên Cloudinary nếu là link ảnh cũ
+      if (currentCard?.cover && String(currentCard.cover).startsWith('http')) {
+        cloudinaryProvider.deleteFile(currentCard.cover).catch(() => {})
+      }
       const uploadResult = await cloudinaryProvider.streamUpload(cardCoverFile.buffer, 'cardCovers')
       updatedCard = await cardModel.update(cardId, {
         cover: uploadResult.secure_url
@@ -157,7 +161,13 @@ const addAttachment = async (userId, cardId, file, isChecklistOnly = false) => {
 const deleteAttachment = async (userId, cardId, attachmentId) => {
   try {
     // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được xóa attachment (fix IDOR)
-    await authorizationService.requireBoardAccessByCardId(userId, cardId)
+    const { card: targetCard } = await authorizationService.requireBoardAccessByCardId(userId, cardId)
+
+    // Dọn dẹp file tương ứng trên Cloudinary
+    const targetAttachment = targetCard?.attachments?.find(att => att._id?.toString() === attachmentId?.toString())
+    if (targetAttachment?.fileUrl) {
+      cloudinaryProvider.deleteFile(targetAttachment.fileUrl).catch(() => {})
+    }
 
     const updatedCard = await cardModel.deleteAttachment(cardId, attachmentId)
     return updatedCard
@@ -168,6 +178,16 @@ const deleteItem = async (cardId, userId) => {
   try {
     // Kiểm tra quyền: chỉ Owner hoặc Member của board chứa card mới được xóa card
     const { card: targetCard } = await authorizationService.requireBoardAccessByCardId(userId, cardId)
+
+    // Dọn các file Cloudinary gắn với card (cover + attachments)
+    if (targetCard?.cover && String(targetCard.cover).startsWith('http')) {
+      cloudinaryProvider.deleteFile(targetCard.cover).catch(() => {})
+    }
+    if (Array.isArray(targetCard?.attachments)) {
+      targetCard.attachments.forEach(att => {
+        if (att?.fileUrl) cloudinaryProvider.deleteFile(att.fileUrl).catch(() => {})
+      })
+    }
 
     // Xóa card + pull khỏi cardOrderIds phải atomic
     return await withTransaction(async (session) => {

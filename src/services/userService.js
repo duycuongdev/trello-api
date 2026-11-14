@@ -323,6 +323,10 @@ const update = async (userId, reqBody, userAvatarFile) => {
       // Đổi mật khẩu => thu hồi toàn bộ refresh token đang có, ép mọi phiên đăng nhập khác phải đăng nhập lại
       await refreshTokenModel.revokeAllByUserId(existUser._id)
     } else if (userAvatarFile) {
+      // Dọn dẹp avatar cũ trên Cloudinary nếu có
+      if (existUser?.avatar && String(existUser.avatar).startsWith('http') && existUser.avatar.includes('res.cloudinary.com')) {
+        cloudinaryProvider.deleteFile(existUser.avatar).catch(() => {})
+      }
       // upload avatar file on cloudinary
       const uploadResult = await cloudinaryProvider.streamUpload(userAvatarFile.buffer, 'trello-users')
 
